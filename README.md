@@ -1,2 +1,2 @@
-# jax-benchmark
-A small project for benchmarking JAX code on the command line.
+# pybm
+A small project for benchmarking Python code on the command line.
