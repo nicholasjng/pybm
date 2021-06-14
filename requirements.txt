@@ -1,2 +1,2 @@
-google-benchmark
-absl
+git+https://github.com/google/benchmark.git
+click
