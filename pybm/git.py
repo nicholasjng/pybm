@@ -2,8 +2,12 @@
 
 import subprocess
 import re
-import os
 from typing import Optional, Tuple, List, Dict
+from git_utils import parse_flags
+
+_ROOT = "root"
+_COMMIT = "commit"
+_BRANCH = "branch"
 
 class GitWrapper:
     """Wrapper class for a Git-based benchmark environment creator."""
@@ -17,10 +21,9 @@ class GitWrapper:
         call_args = [self.executable, command]
         if subcommand is not None:
             call_args.append(subcommand)
-
         call_args += list(args)
-
-        # TODO: Handle kwargs as additional command line args to git
+        # parse git command line args separately
+        call_args += parse_flags(command, subcommand, **kwargs)
         return subprocess.check_output(call_args).decode("utf-8")
 
     def get_version(self) -> Tuple[int]:
@@ -29,51 +32,57 @@ class GitWrapper:
         version_ints = map(int, version_string.split("."))
         return tuple(version_ints)
 
-    @staticmethod
-    def is_git_repository():
-        # Check relative to current path, assumes everything is working.
-        return os.path.exists(".git")
+    def get_worktree_by_attribute(self, key: str, attr: str):
+        try:
+            wt = next(wt for wt in self.worktrees if wt[key] == attr)
+        except KeyError:
+            raise ValueError(f"Worktree attribute {key} does not exist.")
+        except StopIteration:
+            wt = None
+        return wt
 
     def list_worktrees(self) -> List[Dict[str, str]]:
         worktree_string = self.run_command("worktree", "list")
         worktree_lists = map(str.split, worktree_string.splitlines())
         # order of listed git worktree data
-        keys = ["root", "commit", "branch"]
+        keys = [_ROOT, _COMMIT, _BRANCH]
         worktree_dicts = map(lambda x: dict(zip(keys, x)), worktree_lists)
         return list(worktree_dicts)
 
+    # TODO: Cache list of tags (?)
     def list_tags(self):
         return self.run_command("tag").splitlines()
 
     def add_worktree(self, commit_or_tag: str, name: Optional[str] = None,
-                     **kwargs):
-        if any(commit_or_tag in wt for wt in self.worktrees):
+                     force=False, checkout=False, lock=False):
+        # TODO: Allow multiple worktrees of the same commit
+        #  for different custom requirements
+        if self.get_worktree_by_attribute(_COMMIT, commit_or_tag):
             msg = f"fatal: Worktree with ID {commit_or_tag} already exists."
             return msg
-
-        if commit_or_tag in self.list_tags(): # ID is a tag
+        # ID is a tag
+        if commit_or_tag in self.list_tags():
             # use tags/$TAG syntax to avoid ambiguity
             ref_commit = self.run_command("rev-list", None, "-n", "1",
                                           f"tags/{commit_or_tag}")
-        else: # it is a commit SHA
+        # ID is a commit SHA
+        else:
             ref_commit = commit_or_tag
 
         if not name:
             # worktree name repo@<sha> in the current directory
             name = "@".join([self.repository_name, ref_commit])
 
-        return self.run_command("worktree", "add", name, ref_commit)
+        return self.run_command("worktree", "add", name, ref_commit,
+                                force=force, checkout=checkout, lock=lock)
 
-    def remove_worktree(self, commit_or_tag: str, force: bool = False):
-        if not any(commit_or_tag in wt for wt in self.worktrees):
+    def remove_worktree(self, commit_or_tag: str, force=False):
+        # find worktree by commit or tag
+        rm_worktree = self.get_worktree_by_attribute(_COMMIT, commit_or_tag)
+        if not rm_worktree:
             msg = f"fatal: Worktree with ID {commit_or_tag} does not exist."
             return msg
 
-        try:
-            worktree_to_delete = next(wt for wt in self.worktrees if commit_or_tag in wt)
-        except StopIteration:
-            raise ValueError(f"no worktree with ID {commit_or_tag} found.")
-
-        self.worktrees.remove(worktree_to_delete)
+        self.worktrees.remove(rm_worktree)
         return self.run_command("worktree", "remove", commit_or_tag,
                                 force=force)
