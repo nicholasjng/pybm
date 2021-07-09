@@ -25,5 +25,6 @@ setup(
         'console_scripts': ['pybm=pybm.main:main']
     },
     author="Nicholas Junge",
-    license="MIT"
+    license="Apache-2.0",
+    url="https://github.com/njunge94/pybm"
 )

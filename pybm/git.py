@@ -53,7 +53,7 @@ class GitWrapper:
 
     def list_local_branches(self):
         branch_list = self.run_command("branch").splitlines()
-        # strip leading git branch CLI tokens from output
+        # strip leading formatting tokens from git branch output
         return lmap(lambda x: x.lstrip(" *+"), branch_list)
 
     def add_worktree(self, commit_or_tag: str, name: Optional[str] = None,

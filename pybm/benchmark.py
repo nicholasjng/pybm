@@ -14,5 +14,6 @@ def computing_complexity(state):
         sum(range(state.range(0)))
     state.complexity_n = state.range(0)
 
+
 if __name__ == "__main__":
     gbm.main()
