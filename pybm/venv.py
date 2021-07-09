@@ -11,16 +11,17 @@ class VirtualenvBuilder:
     """Virtual environment builder class."""
     def __init__(self):
         self.executable = sys.executable
+        self.venv_paths = []
 
     def run_command(self, *args, **kwargs):
-        call_args = [self.executable, "-m", "venv"]
-        call_args += list(args)
-        call_args += parse_venv_flags(**kwargs)
-        return subprocess.check_output(call_args).decode("utf-8")
+        command = [self.executable, "-m", "venv"]
+        command.extend(list(args))
+        command.extend(parse_venv_flags(**kwargs))
+        return subprocess.check_output(command).decode("utf-8")
 
-    def create(self, env_dir: str, overwrite=False):
+    def create_environment(self, env_dir: str, overwrite=False):
         self.run_command(env_dir, overwrite=overwrite)
 
     @staticmethod
-    def remove(env_dir: str):
+    def remove_environment(env_dir: str):
         shutil.rmtree(env_dir)

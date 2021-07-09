@@ -3,7 +3,7 @@
 import subprocess
 import re
 from typing import Optional, Tuple, List, Dict
-from git_utils import parse_flags
+from git_utils import parse_flags, lmap, tmap
 
 _ROOT = "root"
 _COMMIT = "commit"
@@ -20,23 +20,23 @@ class GitWrapper:
                     *args, **kwargs) -> str:
         call_args = [self.executable, command]
         if subcommand is not None:
-            call_args.append(subcommand)
-        call_args += list(args)
+            call_args.extend([subcommand])
+        call_args.extend(list(args))
         # parse git command line args separately
-        call_args += parse_flags(command, subcommand, **kwargs)
+        call_args.extend(parse_flags(command, subcommand, **kwargs))
+        # TODO: Exception handling
         return subprocess.check_output(call_args).decode("utf-8")
 
     def get_version(self) -> Tuple[int]:
         output = self.run_command("--version")
         version_string = re.search(r'([\d.]+)', output).group()
-        version_ints = map(int, version_string.split("."))
-        return tuple(version_ints)
+        return tmap(int, version_string.split("."))
 
-    def get_worktree_by_attribute(self, key: str, attr: str):
+    def get_worktree_by_attribute(self, attr: str, value: str):
         try:
-            wt = next(wt for wt in self.worktrees if wt[key] == attr)
+            wt = next(wt for wt in self.worktrees if wt[attr] == value)
         except KeyError:
-            raise ValueError(f"Worktree attribute {key} does not exist.")
+            raise ValueError(f"Worktree attribute {attr} does not exist.")
         except StopIteration:
             wt = None
         return wt
@@ -46,12 +46,15 @@ class GitWrapper:
         worktree_lists = map(str.split, worktree_string.splitlines())
         # order of listed git worktree data
         keys = [_ROOT, _COMMIT, _BRANCH]
-        worktree_dicts = map(lambda x: dict(zip(keys, x)), worktree_lists)
-        return list(worktree_dicts)
+        return lmap(lambda x: dict(zip(keys, x)), worktree_lists)
 
-    # TODO: Cache list of tags (?)
     def list_tags(self):
         return self.run_command("tag").splitlines()
+
+    def list_local_branches(self):
+        branch_list = self.run_command("branch").splitlines()
+        # strip leading git branch CLI tokens from output
+        return lmap(lambda x: x.lstrip(" *+"), branch_list)
 
     def add_worktree(self, commit_or_tag: str, name: Optional[str] = None,
                      force=False, checkout=False, lock=False):
@@ -73,6 +76,8 @@ class GitWrapper:
             # worktree name repo@<sha> in the current directory
             name = "@".join([self.repository_name, ref_commit])
 
+        # TODO: Translating everything into commit SHAs leads to detached
+        #  HEADs, improve this
         return self.run_command("worktree", "add", name, ref_commit,
                                 force=force, checkout=checkout, lock=lock)
 

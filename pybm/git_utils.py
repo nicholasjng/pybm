@@ -1,6 +1,7 @@
 import os
-from typing import List
+from typing import List, Iterable
 
+# small git flag database for worktree commands
 _git_worktree_flags = {
     "add": {"force": {True: "-f", False: None},
             "checkout": {True: "--checkout", False: "--no-checkout"},
@@ -9,6 +10,12 @@ _git_worktree_flags = {
     "list": {"porcelain": {True: "--porcelain", False: None}},
     "remove": {"force": {True: "-f", False: None}}
 }
+
+def lmap(fn, iterable: Iterable):
+    return list(map(fn, iterable))
+
+def tmap(fn, iterable: Iterable):
+    return tuple(map(fn, iterable))
 
 def is_git_repository():
     # Check relative to current path, assumes everything is working.
