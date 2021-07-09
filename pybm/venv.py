@@ -7,7 +7,7 @@ import sys
 from venv_utils import parse_venv_flags
 
 
-class VirtualenvBuilder:
+class VenvBuilder:
     """Virtual environment builder class."""
     def __init__(self):
         self.executable = sys.executable
