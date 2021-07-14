@@ -1,17 +1,49 @@
-import argparse
-from pybm import __version__
-from pybm.exceptions import CommandError
+import sys
+from typing import List, Tuple
 
-def get_command_parser(command_name: str) -> argparse.ArgumentParser:
-    if command_name not in command_database:
-        raise CommandError(f"unknown command: {command_name}")
+from pybm.command import CLICommand
+from pybm.commands import command_db
+from pybm.exceptions import CommandError, ArgumentError
 
-    command_data = command_database[command_name]
-    arguments = command_data.pop("arguments")
-    parser = argparse.ArgumentParser(**command_data)
-    for arg, opts in arguments.items():
-        parser.add_argument(arg, **opts)
-    return parser
+# CLI command prefix for pybm
+cmd_prefix = "-"
+
+def parse_args(args: List[str]) -> Tuple[str, List[str]]:
+    """
+    Process the arguments passed to the pybm CLI main entrypoint.
+
+    This function only checks syntactic correctness, it is not responsible
+    for checking whether the given values for CLI options are actually
+    valid.
+    """
+
+    # TODO: Refactor this branch based on likelihood of single option call
+    # check block for pybm + single option call
+    if len(args) < 2:
+        # bare pybm call with no arguments
+        if not args:
+            return "base", args
+
+        # not args == False <=> len(args) > 0
+        opt = args[0]
+        if not opt.startswith(cmd_prefix):
+            raise ArgumentError(f"unknown option {opt} "
+                                f"encountered for command \"pybm\"")
+        else:
+            return "base", args
+    else:
+        command_name, *command_args = args
+
+        return command_name, command_args
+
+
+def parse_command(command_name: str) -> CLICommand:
+    # unknown command
+    if command_name not in command_db:
+        # TODO: Print similar commands if any, or print options
+        raise CommandError(f"unknown command {command_name}")
+
+    return command_db[command_name]
 
 
 command_database = {
@@ -21,17 +53,9 @@ command_database = {
         "prog": "create",
         "description": "Create a pybm benchmark environment.",
         "usage": "pybm create [<commit-ish>] [<dest>] [<options>]",
-        # options
-        "arguments": {
-            "-p": {
-                "nargs": 1,
-                "help": None,
-                "default": None,
-                "metavar": None,
-                "choices": None,
-            },
-
-        }
+        # arguments, either string or comma-separated string list for aliases
+        # (e.g. -d,--delete for a delete flag and shorthand)
+        "arguments": ["-p"]
     },
     "update": {
 
@@ -42,15 +66,21 @@ command_database = {
     "run": {
 
     },
-    # version command
-    "--version": {
-        "arguments": {
-            "--version": {
-                # special argparse action for version printing
-                "action": "version",
-                "version": f"%(prog)s version {__version__}"
-            }
+    "set": {
 
-        }
-    }
+    },
+}
+
+argument_store = {
+    "--commit-ish": {
+        "nargs": "+",
+        "help": "Git refs to create worktrees for"
+    },
+    "-p": {
+        "nargs": 1,
+        "help": "Python executable used to create the virtual environment.",
+        "default": sys.executable,
+        "metavar": None,
+        "choices": None,
+    },
 }

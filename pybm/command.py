@@ -1,20 +1,24 @@
 import argparse
-from typing import List, Any
-from pybm.parsers import get_command_parser
 
 class CLICommand:
     """CLI command base class."""
-    def __init__(self, name: str):
+    usage = None
+
+    def __init__(self, name: str, **argument_parser_kwargs):
+        # command name
         self.name = name
-        self.parser: argparse.ArgumentParser = get_command_parser(name)
+        self.parser = argparse.ArgumentParser(prog=self.format_name(),
+                                              usage=self.usage,
+                                              description=self.__doc__,
+                                              **argument_parser_kwargs)
 
-    def parse_args(self, args: Any):
-        return self.parser.parse_args(args)
-
-    def run(self, *args, **kwargs):
+    def add_arguments(self):
+        """Add arguments to class argument parser member."""
         raise NotImplementedError
 
+    def format_name(self) -> str:
+        return f"pybm {self.name}".strip()
 
-class VersionCommand(CLICommand):
-    def run(self, *args, **kwargs):
-        pass
+    def run(self, *args, **kwargs) -> int:
+        """Execute the logic behind a run CLI command."""
+        raise NotImplementedError
