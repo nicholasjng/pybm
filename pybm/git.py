@@ -1,20 +1,23 @@
-"""Small Git wrapper for operating on a repository via Python."""
+"""Small Git worktree wrapper for operating on a repository via Python."""
 
 import subprocess
 import re
 from typing import Optional, Tuple, List, Dict
-from git_utils import parse_flags, lmap, tmap
+from pybm.exceptions import GitError
+from pybm.git_utils import parse_flags, lmap, tmap, get_repository_name
 
 _ROOT = "root"
 _COMMIT = "commit"
 _BRANCH = "branch"
 
-class GitWrapper:
+
+class GitWorktreeWrapper:
     """Wrapper class for a Git-based benchmark environment creator."""
+
     def __init__(self):
         self.worktrees = self.list_worktrees()
         self.executable = "git"
-        self.repository_name = ""
+        self.repository_name = get_repository_name()
 
     def run_command(self, command: str, subcommand: Optional[str] = None,
                     *args, **kwargs) -> str:
@@ -25,7 +28,10 @@ class GitWrapper:
         # parse git command line args separately
         call_args.extend(parse_flags(command, subcommand, **kwargs))
         # TODO: Exception handling
-        return subprocess.check_output(call_args).decode("utf-8")
+        try:
+            return subprocess.check_output(call_args).decode("utf-8")
+        except subprocess.CalledProcessError as e:
+            raise GitError(str(e))
 
     def get_version(self) -> Tuple[int]:
         output = self.run_command("--version")

@@ -1,5 +1,6 @@
 import os
 from typing import List, Iterable
+from pathlib import Path
 
 # small git flag database for worktree commands
 _git_worktree_flags = {
@@ -11,15 +12,23 @@ _git_worktree_flags = {
     "remove": {"force": {True: "-f", False: None}}
 }
 
+
 def lmap(fn, iterable: Iterable):
     return list(map(fn, iterable))
+
 
 def tmap(fn, iterable: Iterable):
     return tuple(map(fn, iterable))
 
+
 def is_git_repository():
     # Check relative to current path, assumes everything is working.
     return os.path.exists(".git")
+
+
+def get_repository_name():
+    return Path.cwd().stem
+
 
 def parse_flags(command: str, subcommand: str, **kwargs) -> List[str]:
     if command != "worktree":
