@@ -1,4 +1,3 @@
-import sys
 from typing import List, Tuple
 
 from pybm.command import CLICommand
@@ -7,6 +6,7 @@ from pybm.exceptions import CommandError
 
 # CLI command prefix for pybm
 cmd_prefix = "-"
+
 
 def parse_args(args: List[str]) -> Tuple[str, List[str]]:
     """
@@ -68,19 +68,5 @@ command_database = {
     },
     "set": {
 
-    },
-}
-
-argument_store = {
-    "--commit-ish": {
-        "nargs": "+",
-        "help": "Git refs to create worktrees for"
-    },
-    "-p": {
-        "nargs": 1,
-        "help": "Python executable used to create the virtual environment.",
-        "default": sys.executable,
-        "metavar": None,
-        "choices": None,
     },
 }

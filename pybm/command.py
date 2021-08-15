@@ -1,4 +1,8 @@
 import argparse
+import sys
+import os
+from pybm.exceptions import ArgumentError, GitError
+
 
 class CLICommand:
     """CLI command base class."""
@@ -18,6 +22,18 @@ class CLICommand:
 
     def format_name(self) -> str:
         return f"pybm {self.name}".strip()
+
+    def run_wrapped(self, *args):
+        try:
+            return self.run(*args)
+        except (
+            ArgumentError,
+            GitError,
+            NotImplementedError
+        ) as e:
+            sys.stderr.write(f"Error: {e}")
+            sys.stderr.write(os.linesep)
+            sys.exit(1)
 
     def run(self, *args, **kwargs) -> int:
         """Execute the logic behind a run CLI command."""

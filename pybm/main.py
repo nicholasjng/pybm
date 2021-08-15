@@ -6,6 +6,7 @@ from pybm.command import CLICommand
 from pybm.exceptions import CommandError
 from pybm.parsers import parse_args, parse_command
 
+
 def main(args: Optional[List[str]] = None) -> int:
     if not args:
         # first argv is absolute script path
