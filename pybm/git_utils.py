@@ -1,4 +1,6 @@
 import os
+import re
+import subprocess
 from typing import List, Iterable, Tuple
 from pathlib import Path
 
@@ -19,8 +21,16 @@ def lmap(fn, iterable: Iterable):
     return list(map(fn, iterable))
 
 
-def tmap(fn, iterable: Iterable):
+def tmap(fn, iterable: Iterable) -> Tuple:
     return tuple(map(fn, iterable))
+
+
+def lfilter(fn, iterable: Iterable) -> List:
+    return list(filter(fn, iterable))
+
+
+def tfilter(fn, iterable: Iterable) -> Tuple:
+    return tuple(filter(fn, iterable))
 
 
 def is_git_repository():
@@ -30,6 +40,45 @@ def is_git_repository():
 
 def get_repository_name():
     return Path.cwd().stem
+
+
+def list_tags():
+    try:
+        tags = subprocess.check_output(["git", "tag"]).decode("utf-8")
+        return tags.splitlines()
+    except subprocess.CalledProcessError as e:
+        raise GitError(str(e))
+
+
+def list_local_branches():
+    try:
+        branches = subprocess.check_output(["git", "branch"]).decode("utf-8")
+        # strip leading formatting tokens from git branch output
+        return lmap(lambda x: x.lstrip(" *+"), branches.splitlines())
+    except subprocess.CalledProcessError as e:
+        raise GitError(str(e))
+
+
+def get_version() -> Tuple[int]:
+    try:
+        output = subprocess.check_output(["git", "--version"]).decode("utf-8")
+        version_string = re.search(r'([\d.]+)', output).group()
+        return tmap(int, version_string.split("."))
+    except subprocess.CalledProcessError as e:
+        raise GitError(str(e))
+
+
+def resolve_commit(ref: str, ref_type: str = "branch") -> str:
+    if ref_type not in ["branch", "tag"]:
+        raise GitError(f"unknown ref type {ref_type} encountered in "
+                       f"git reference resolution attempt.")
+
+    resolved_ref = f"tags/{ref}" if ref_type == "tag" else f"refs/heads/{ref}"
+    try:
+        return subprocess.check_output(["git", "rev-list", "-n", "1",
+                                        resolved_ref]).decode("utf-8")
+    except subprocess.CalledProcessError as e:
+        raise GitError(str(e))
 
 
 def git_feature_guard(command_name: str, min_version: Tuple[int],
@@ -42,21 +91,18 @@ def git_feature_guard(command_name: str, min_version: Tuple[int],
                        f"git version is {version_string(installed)}.")
 
 
-def parse_flags(command: str, subcommand: str, **kwargs) -> List[str]:
-    if command != "worktree":
-        raise NotImplementedError("git flag parsing is only available for "
-                                  "worktree right now.")
-    git_flags = []
-    # TODO: Improve this logic for commands without subcommands
+def parse_flags(command: str, **kwargs) -> List[str]:
+    flags = []
     for k, v in kwargs.items():
-        subcommand_options = _git_worktree_flags[subcommand]
-        if k not in subcommand_options:
+        command_options = _git_worktree_flags[command]
+        if k not in command_options:
             # TODO: log bad kwarg usage somewhere
             continue
-        if v not in subcommand_options[k]:
+        cmd_opts = command_options[k]
+        if v not in cmd_opts:
             raise ValueError(f"unknown value {v} given for option {k}.")
-        flag = subcommand_options[k][v]
+        flag = cmd_opts[v]
         if flag is not None:
-            git_flags.append(flag)
+            flags.append(flag)
 
-    return git_flags
+    return flags
