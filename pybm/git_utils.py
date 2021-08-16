@@ -1,8 +1,10 @@
 import os
-from typing import List, Iterable
+from typing import List, Iterable, Tuple
 from pathlib import Path
 
 # small git flag database for worktree commands
+from pybm.exceptions import GitError
+
 _git_worktree_flags = {
     "add": {"force": {True: "-f", False: None},
             "checkout": {True: "--checkout", False: "--no-checkout"},
@@ -28,6 +30,16 @@ def is_git_repository():
 
 def get_repository_name():
     return Path.cwd().stem
+
+
+def git_feature_guard(command_name: str, min_version: Tuple[int],
+                      installed: Tuple[int]):
+    def version_string(x):
+        return ".".join(map(str, x))
+    if installed < min_version:
+        raise GitError(f"The `git {command_name}` command was first added in "
+                       f"git version {version_string(min_version)}, but your "
+                       f"git version is {version_string(installed)}.")
 
 
 def parse_flags(command: str, subcommand: str, **kwargs) -> List[str]:

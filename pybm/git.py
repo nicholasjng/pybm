@@ -27,7 +27,6 @@ class GitWorktreeWrapper:
         call_args.extend(list(args))
         # parse git command line args separately
         call_args.extend(parse_flags(command, subcommand, **kwargs))
-        # TODO: Exception handling
         try:
             return subprocess.check_output(call_args).decode("utf-8")
         except subprocess.CalledProcessError as e:
@@ -38,11 +37,11 @@ class GitWorktreeWrapper:
         version_string = re.search(r'([\d.]+)', output).group()
         return tmap(int, version_string.split("."))
 
-    def get_worktree_by_attribute(self, attr: str, value: str):
+    def get_worktree_by_attr(self, attr: str, value: str):
         try:
             wt = next(wt for wt in self.worktrees if wt[attr] == value)
         except KeyError:
-            raise ValueError(f"Worktree attribute {attr} does not exist.")
+            raise GitError(f"Worktree attribute {attr} does not exist.")
         except StopIteration:
             wt = None
         return wt
@@ -64,11 +63,10 @@ class GitWorktreeWrapper:
 
     def add_worktree(self, commit_or_tag: str, name: Optional[str] = None,
                      force=False, checkout=False, lock=False):
-        # TODO: Allow multiple worktrees of the same commit
-        #  for different custom requirements
-        if self.get_worktree_by_attribute(_COMMIT, commit_or_tag):
+
+        if not force and self.get_worktree_by_attr(_COMMIT, commit_or_tag):
             msg = f"fatal: Worktree with ID {commit_or_tag} already exists."
-            return msg
+            raise GitError(msg)
         # ID is a tag
         if commit_or_tag in self.list_tags():
             # use tags/$TAG syntax to avoid ambiguity
@@ -89,10 +87,10 @@ class GitWorktreeWrapper:
 
     def remove_worktree(self, commit_or_tag: str, force=False):
         # find worktree by commit or tag
-        rm_worktree = self.get_worktree_by_attribute(_COMMIT, commit_or_tag)
+        rm_worktree = self.get_worktree_by_attr(_COMMIT, commit_or_tag)
         if not rm_worktree:
             msg = f"fatal: Worktree with ID {commit_or_tag} does not exist."
-            return msg
+            raise GitError(msg)
 
         self.worktrees.remove(rm_worktree)
         return self.run_command("worktree", "remove", commit_or_tag,
