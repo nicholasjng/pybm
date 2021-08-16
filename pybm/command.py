@@ -11,10 +11,13 @@ class CLICommand:
     def __init__(self, name: str, **argument_parser_kwargs):
         # command name
         self.name = name
-        self.parser = argparse.ArgumentParser(prog=self.format_name(),
-                                              usage=self.usage,
-                                              description=self.__doc__,
-                                              **argument_parser_kwargs)
+        self.parser = argparse.ArgumentParser(
+            prog=self.format_name(),
+            usage=self.usage,
+            description=self.__doc__,
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            **argument_parser_kwargs
+        )
 
     def add_arguments(self):
         """Add arguments to class argument parser member."""
@@ -27,9 +30,9 @@ class CLICommand:
         try:
             return self.run(*args)
         except (
-            ArgumentError,
-            GitError,
-            NotImplementedError
+                ArgumentError,
+                GitError,
+                NotImplementedError
         ) as e:
             sys.stderr.write(f"Error: {e}")
             sys.stderr.write(os.linesep)
