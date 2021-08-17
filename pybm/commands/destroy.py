@@ -19,7 +19,6 @@ class DestroyCommand(CLICommand):
     def add_arguments(self):
         self.parser.add_argument("commit-ish",
                                  metavar="<commit-ish>",
-                                 nargs=1,
                                  help="Commit, branch or tag to create a "
                                       "git worktree for.")
         self.parser.add_argument("-f", "--force",
@@ -27,6 +26,12 @@ class DestroyCommand(CLICommand):
                                  help="Force worktree creation. Useful for "
                                       "checking out a branch multiple times "
                                       "with different custom requirements.")
+        self.parser.add_argument("-v",
+                                 action="count",
+                                 default=0,
+                                 help="Enable verbose mode. This causes pybm "
+                                      "to log information useful for "
+                                      "debugging.")
 
     def run(self, *args, **kwargs) -> int:
         self.add_arguments()
@@ -34,13 +39,17 @@ class DestroyCommand(CLICommand):
         namespace = self.parser.parse_args(*args)
         var_dict = vars(namespace)
 
+        verbose = var_dict.pop("v")
+        if verbose:
+            print(var_dict)
+
         if not is_git_repository():
-            raise GitError("No git repository present in this path")
+            raise GitError("No git repository present in this path.")
 
         git = GitWorktreeWrapper()
 
         git.remove_worktree(var_dict["commit-ish"],
-                            force=var_dict["f"],
+                            force=var_dict["force"],
                             )
 
         return SUCCESS
