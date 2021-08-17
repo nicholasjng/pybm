@@ -21,4 +21,4 @@ def main(args: Optional[List[str]] = None) -> int:
         sys.stderr.write(os.linesep)
         sys.exit(1)
 
-    return command.run(command_args)
+    return command.run_wrapped(command_args)
