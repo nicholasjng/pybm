@@ -1,9 +1,11 @@
 from setuptools import setup, find_packages
 
+
 def get_requirements() -> list[str]:
     with open("requirements.txt", "r") as f:
         reqs = f.readlines()
     return reqs
+
 
 def get_version(fp) -> str:
     with open(fp, "r") as f:
@@ -25,5 +27,6 @@ setup(
         'console_scripts': ['pybm=pybm.main:main']
     },
     author="Nicholas Junge",
-    license="MIT"
+    license="Apache-2.0",
+    url="https://github.com/njunge94/pybm"
 )
