@@ -47,20 +47,22 @@ def is_valid_sha1_part(input_str: str, min_length: int = 7) -> bool:
 
 
 def resolve_to_ref(commit_ish: str, resolve_commits: bool):
+    ref = commit_ish
     if commit_ish in list_tags():
         # ref is a tag name
-        ref, ref_type = f"refs/tags/{commit_ish}", "tag"
+        ref_type = "tag"
     # TODO: Make a worktree from a remote branch (does not appear here)
     elif commit_ish in list_local_branches():
         # ref is a local branch name
-        ref, ref_type = f"refs/heads/{commit_ish}", "branch"
+        ref_type = "branch"
     elif is_valid_sha1_part(commit_ish):
-        ref, ref_type = commit_ish, "commit"
+        ref_type = "commit"
     else:
         msg = f"input {commit_ish} did not resolve to any known local " \
-              f"branch, tag or commit SHA1."
+              f"branch, tag or commit SHA1. If you specified a commit SHA " \
+              f"fragment, please make sure it is at least 7 characters long " \
+              f"to ensure git SHA resolution works."
         raise GitError(msg)
-
     # force commit resolution, leads to detached HEAD
     if resolve_commits:
         ref, ref_type = resolve_commit(ref), "commit"
@@ -96,9 +98,12 @@ def get_version() -> Tuple[int]:
 
 def resolve_commit(ref: str) -> str:
     try:
-        return subprocess.check_output(
-            ["git", "rev-list", "-n", "1", ref]
-        ).decode("utf-8")
+        if is_valid_sha1_part(ref):
+            return subprocess.check_output(
+                ["git", "rev-parse", ref]).decode("utf-8")
+        else:
+            return subprocess.check_output(
+                ["git", "rev-list", "-n", "1", ref]).decode("utf-8")
     except subprocess.CalledProcessError as e:
         raise GitError(str(e))
 
