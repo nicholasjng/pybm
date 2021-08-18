@@ -9,3 +9,7 @@ class ArgumentError(ValueError):
 
 class GitError(ValueError):
     pass
+
+
+class VenvError(ValueError):
+    pass
