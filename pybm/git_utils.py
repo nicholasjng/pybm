@@ -4,8 +4,28 @@ import subprocess
 from typing import List, Iterable, Tuple
 from pathlib import Path
 
-# small git flag database for worktree commands
 from pybm.exceptions import GitError
+
+MIN_VERSION = "min_version"
+OPTIONS = "options"
+
+_git_feature_versions = {
+    "add": {MIN_VERSION: (2, 6, 7),
+            OPTIONS: {
+                "-f": (2, 6, 7),
+                "--checkout": (2, 9, 5),
+                "--no-checkout": (2, 9, 5),
+                "--lock": (2, 13, 7),
+            }},
+    "list": {MIN_VERSION: (2, 7, 6),
+             OPTIONS: {
+                 "--porcelain": (2, 7, 6)
+             }},
+    "remove": {MIN_VERSION: (2, 17, 0),
+               OPTIONS: {
+                   "-f": (2, 17, 0)
+               }},
+}
 
 
 def lmap(fn, iterable: Iterable):
@@ -87,7 +107,7 @@ def list_local_branches():
         raise GitError(str(e))
 
 
-def get_version() -> Tuple[int]:
+def get_git_version() -> Tuple[int]:
     try:
         output = subprocess.check_output(["git", "--version"]).decode("utf-8")
         version_string = re.search(r'([\d.]+)', output).group()
@@ -108,11 +128,39 @@ def resolve_commit(ref: str) -> str:
         raise GitError(str(e))
 
 
-def git_feature_guard(command_name: str, min_version: Tuple[int],
-                      installed: Tuple[int]):
+def git_worktree_feature_guard(command: List[str]):
     def version_string(x):
         return ".".join(map(str, x))
+
+    assert len(command) > 2 and command[:2] == ["git", "worktree"], \
+        "internal git command construction error"
+
+    worktree_command, rest = command[2], command[2:]
+    assert worktree_command in _git_feature_versions, f"unimplemented git " \
+                                                      f"worktree command " \
+                                                      f"`{worktree_command}`"
+
+    command_data = _git_feature_versions[worktree_command]
+    min_version, options = command_data[MIN_VERSION], command_data[OPTIONS]
+    # log offending command or option for dynamic exception printing
+    newest, dtype = worktree_command, "command"
+
+    for k in lfilter(lambda x: x.startswith("-"), rest):
+        if k in options:
+            contender = options[k]
+            if contender > min_version:
+                min_version = contender
+                newest, dtype = k, "option"
+
+    installed = get_git_version()
+    full_command = " ".join(command)
+
     if installed < min_version:
-        raise GitError(f"The `git {command_name}` command was first added in "
-                       f"git version {version_string(min_version)}, but your "
-                       f"git version is {version_string(installed)}.")
+        raise GitError(f"Running the command `{full_command}` requires a "
+                       f"minimum git version of"
+                       f"{version_string(min_version)}, but your git "
+                       f"version was found to be only"
+                       f" {version_string(installed)}. "
+                       f"This version requirement is because the {dtype} "
+                       f"`{newest}` was used, which was first introduced in "
+                       f"git version {version_string(min_version)}.")

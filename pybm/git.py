@@ -5,7 +5,11 @@ from pathlib import Path
 from typing import Optional, List, Dict
 from pybm.exceptions import GitError
 from pybm.git_utils import lmap, get_repository_name, \
-    list_local_branches, resolve_commit, lfilter, resolve_to_ref
+    list_local_branches, resolve_commit, lfilter, resolve_to_ref, \
+    git_worktree_feature_guard
+
+# small git flag database for worktree commands
+from pybm.subprocessing import CommandWrapperMixin
 
 _git_worktree_flags = {
     "add": {"force": {True: "-f", False: None},
@@ -17,44 +21,38 @@ _git_worktree_flags = {
 }
 
 
-class GitWorktreeWrapper:
+class GitWorktreeWrapper(CommandWrapperMixin):
     """Wrapper class for a Git-based benchmark environment creator."""
 
     def __init__(self):
+        super().__init__(command_db=_git_worktree_flags,
+                         exception_type=GitError)
         self.executable = "git"
+        self.worktrees = self.list_worktrees()
         self.repository_name = get_repository_name()
 
-    @staticmethod
-    def parse_flags(command: str, **kwargs) -> List[str]:
-        flags = []
-        for k, v in kwargs.items():
-            command_options = _git_worktree_flags[command]
-            if k not in command_options:
-                # TODO: log bad kwarg usage somewhere
-                continue
-            cmd_opts = command_options[k]
-            if v not in cmd_opts:
-                raise ValueError(f"unknown value {v} given for option {k}.")
-            flag = cmd_opts[v]
-            if flag is not None:
-                flags.append(flag)
-
-        return flags
-
-    def run_command(self, command: str, *args, **kwargs) -> str:
-        call_args = [self.executable, "worktree", command]
-
-        call_args.extend(list(args))
+    def prepare_subprocess_args(self, command: str, *args, **kwargs):
+        call_args = [self.executable, "worktree", command, *args]
         # parse git command line args separately
-        call_args.extend(self.parse_flags(command, **kwargs))
-        try:
-            return subprocess.check_output(call_args).decode("utf-8")
-        except subprocess.CalledProcessError as e:
-            full_command = " ".join(call_args)
-            msg = f"The command `{full_command}` returned the non-zero " \
-                  f"exit code {e.returncode}. Further information (output of " \
-                  f"the subprocess command):\n\n {e.output.decode()}"
-            raise GitError(msg)
+        call_args += self.parse_flags(command, **kwargs)
+        return call_args
+
+    def return_output(self, command: str, *args, **kwargs):
+        call_args = self.prepare_subprocess_args(command, *args, **kwargs)
+        git_worktree_feature_guard(call_args)
+        return self.wrapped_subprocess_call("check_output",
+                                            call_args=call_args,
+                                            encoding="utf-8")
+
+    def run_command(self, command: str, *args, **kwargs) -> int:
+        call_args = self.prepare_subprocess_args(command, *args, **kwargs)
+        git_worktree_feature_guard(call_args)
+        return self.wrapped_subprocess_call(name="run",
+                                            call_args=call_args,
+                                            stdout=subprocess.DEVNULL,
+                                            stderr=subprocess.PIPE,
+                                            check=True,
+                                            encoding="utf-8")
 
     def get_worktree_by_name(self, name: str):
         worktrees = self.list_worktrees()
@@ -93,7 +91,8 @@ class GitWorktreeWrapper:
         return handlers.get(ref_type)(ref)
 
     def list_worktrees(self, porcelain: bool = True) -> List[Dict[str, str]]:
-        attr_list = self.run_command("list", porcelain=porcelain).splitlines()
+        attr_list = self.return_output("list",
+                                       porcelain=porcelain).splitlines()
         # git worktree porcelain lists are twice newline-terminated at the end,
         # creating an empty string when applying str.splitlines()
         attr_list = lfilter(lambda x: x != "", attr_list)
@@ -148,3 +147,6 @@ class GitWorktreeWrapper:
             raise GitError(msg)
 
         return self.run_command("remove", info, force=force)
+
+
+git = GitWorktreeWrapper()
