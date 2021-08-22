@@ -2,54 +2,47 @@
 Virtual environment creation class for benchmarking
 with custom requirements in Python."""
 import os
-import subprocess
 import shutil
-import sys
 from typing import List
 
 from pybm.exceptions import VenvError
+from pybm.subprocessing import CommandWrapperMixin
 
 _venv_flags = {
-    "overwrite": {True: "--clear", False: None},
-    "upgrade_deps": {True: "--upgrade-deps", False: None}
+    "venv": {
+        "overwrite": {True: "--clear", False: None},
+        "upgrade_deps": {True: "--upgrade-deps", False: None}
+    },
+    "pip": {
+
+    },
 }
 
 
-class VenvBuilder:
+class VenvBuilder(CommandWrapperMixin):
     """Virtual environment builder class."""
 
     def __init__(self):
-        self.executable = sys.executable
-        self.venv_root = os.getenv("VENV_HOME", None)
+        # either the venv is created in a special home directory or straight
+        # into the worktree
+        super().__init__(command_db=_venv_flags, exception_type=VenvError)
+        self.venv_root = os.getenv("VENV_HOME", os.getcwd())
         self.venv_paths = []
 
-    @staticmethod
-    def parse_flags(**kwargs) -> List[str]:
-        flags = []
-        for k, v in kwargs.items():
-            if k not in _venv_flags:
-                raise ValueError(f"unknown option {k} supplied.")
-            options = _venv_flags[k]
-            if v not in options:
-                raise ValueError(f"unknown value {v} given for option {k}.")
-            flag = options[v]
-            if flag is not None:
-                flags.append(flag)
-        return flags
+    def prepare_subprocess_args(self, executable: str, env_dir: str, **kwargs):
+        call_args = [executable, "-m", "venv", env_dir]
+        # parse venv command line options separately
+        call_args += self.parse_flags(**kwargs)
+        return call_args
 
-    def create_environment(self, env_dir: str, **kwargs):
-        command = [self.executable, "-m", "venv", env_dir]
-        command += self.parse_flags(**kwargs)
-        new_env_path = os.path.join(os.getcwd(), env_dir)
+    def create_environment(self, executable: str, env_dir: str, **kwargs) -> \
+            int:
+        command = self.prepare_subprocess_args(executable=executable,
+                                               env_dir=env_dir,
+                                               **kwargs)
+        new_env_path = os.path.join(self.venv_root, env_dir)
         self.venv_paths.append(new_env_path)
-        try:
-            return subprocess.check_output(command).decode("utf-8")
-        except subprocess.CalledProcessError as e:
-            full_command = " ".join(command)
-            msg = f"The command `{full_command}` returned the non-zero " \
-                  f"exit code {e.returncode}. Further information (output of " \
-                  f"the subprocess command):\n\n {e.output.decode()}"
-            raise VenvError(msg)
+        return self.wrapped_subprocess_call("run", command, encoding="utf-8")
 
     @staticmethod
     def remove_environment(env_dir: str):
