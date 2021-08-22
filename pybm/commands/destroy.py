@@ -1,4 +1,4 @@
-import sys
+from typing import List
 
 from pybm.command import CLICommand
 from pybm.exceptions import GitError
@@ -26,17 +26,15 @@ class DestroyCommand(CLICommand):
                                  help="Force worktree creation. Useful for "
                                       "checking out a branch multiple times "
                                       "with different custom requirements.")
-        self.parser.add_argument("-v",
-                                 action="count",
-                                 default=0,
-                                 help="Enable verbose mode. This causes pybm "
-                                      "to log information useful for "
-                                      "debugging.")
 
-    def run(self, *args, **kwargs) -> int:
+    def run(self, args: List[str]) -> int:
         self.add_arguments()
 
-        namespace = self.parser.parse_args(*args)
+        if not args:
+            self.parser.print_help()
+            return ERROR
+
+        namespace = self.parser.parse_args(args)
         var_dict = vars(namespace)
 
         verbose = var_dict.pop("v")

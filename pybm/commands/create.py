@@ -1,10 +1,11 @@
 import sys
+from typing import List
 
 from pybm.command import CLICommand
 from pybm.exceptions import GitError
-from pybm.git import GitWorktreeWrapper
+from pybm.git import git
 from pybm.git_utils import is_git_repository
-from pybm.status_codes import SUCCESS
+from pybm.status_codes import ERROR, SUCCESS
 
 
 class CreateCommand(CLICommand):
@@ -36,42 +37,41 @@ class CreateCommand(CLICommand):
                                  metavar="<python>")
         self.parser.add_argument("-f", "--force",
                                  action="store_true",
+                                 default=False,
                                  help="Force worktree creation. Useful for "
                                       "checking out a branch multiple times "
                                       "with different custom requirements.")
         self.parser.add_argument("--no-checkout",
                                  action="store_true",
+                                 default=False,
                                  help="Skip worktree checkout after creation. "
                                       "This can be used to sparsely "
                                       "check out branches.")
         self.parser.add_argument("-R", "--resolve-commits",
                                  action="store_true",
+                                 default=False,
                                  help="Always resolve the given git ref to "
                                       "its associated commit. If the given "
                                       "ref is a branch name, this detaches "
                                       "the HEAD (see https://git-scm.com/docs/"
                                       "git-checkout#_detached_head).")
-        self.parser.add_argument("-v",
-                                 action="count",
-                                 default=0,
-                                 help="Enable verbose mode. This causes pybm "
-                                      "to log information useful for "
-                                      "debugging.")
 
-    def run(self, *args, **kwargs) -> int:
+    def run(self, args: List[str]):
         self.add_arguments()
 
-        namespace = self.parser.parse_args(*args)
+        if not args:
+            self.parser.print_help()
+            return ERROR
+
+        namespace = self.parser.parse_args(args)
         var_dict = vars(namespace)
 
         verbose = var_dict.pop("v")
         if verbose:
-            print(var_dict)
+            print(f"Parsed command line options: {var_dict}")
 
         if not is_git_repository():
             raise GitError("No git repository present in this path")
-
-        git = GitWorktreeWrapper()
 
         git.add_worktree(var_dict["commit-ish"],
                          name=var_dict["dest"],
