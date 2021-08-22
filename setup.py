@@ -3,8 +3,7 @@ from setuptools import setup, find_packages
 
 def get_requirements() -> list[str]:
     with open("requirements.txt", "r") as f:
-        reqs = f.readlines()
-    return reqs
+        return f.readlines()
 
 
 def get_version(fp) -> str:

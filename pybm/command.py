@@ -1,14 +1,16 @@
 import argparse
 import sys
-import os
-from pybm.exceptions import ArgumentError, GitError
+from typing import Any, List
+
+from pybm.exceptions import ArgumentError, GitError, VenvError, \
+    write_exception_info
 
 
 class CLICommand:
     """CLI command base class."""
     usage = None
 
-    def __init__(self, name: str, **argument_parser_kwargs):
+    def __init__(self, name: str, **parser_kwargs):
         # command name
         self.name = name
         self.parser = argparse.ArgumentParser(
@@ -16,8 +18,14 @@ class CLICommand:
             usage=self.usage,
             description=self.__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            **argument_parser_kwargs
+            **parser_kwargs
         )
+        self.parser.add_argument("-v",
+                                 action="count",
+                                 default=0,
+                                 help="Enable verbose mode. Makes pybm "
+                                      "log information that might be useful "
+                                      "for debugging.")
 
     def add_arguments(self):
         """Add arguments to class argument parser member."""
@@ -26,18 +34,21 @@ class CLICommand:
     def format_name(self) -> str:
         return f"pybm {self.name}".strip()
 
-    def run_wrapped(self, *args):
+    def run_wrapped(self, args: List[Any]):
         try:
-            return self.run(*args)
+            return self.run(args)
         except (
                 ArgumentError,
-                GitError,
                 NotImplementedError
         ) as e:
-            sys.stderr.write(f"Error: {e}")
-            sys.stderr.write(os.linesep)
+            write_exception_info(e)
+        except GitError as e:
+            write_exception_info(e, origin="git")
+        except VenvError as e:
+            write_exception_info(e, origin="venv")
+        finally:
             sys.exit(1)
 
-    def run(self, *args, **kwargs) -> int:
+    def run(self, args: List[Any]) -> int:
         """Execute the logic behind a run CLI command."""
         raise NotImplementedError

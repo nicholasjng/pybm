@@ -44,29 +44,3 @@ def parse_command(command_name: str) -> CLICommand:
         raise CommandError(f"unknown command {command_name}")
 
     return command_db[command_name]
-
-
-command_database = {
-    # top level: commands
-    "create": {
-        # program name (pybm [COMMAND])
-        "prog": "create",
-        "description": "Create a pybm benchmark environment.",
-        "usage": "pybm create [<commit-ish>] [<dest>] [<options>]",
-        # arguments, either string or comma-separated string list for aliases
-        # (e.g. -d,--delete for a delete flag and shorthand)
-        "arguments": ["-p"]
-    },
-    "update": {
-
-    },
-    "destroy": {
-
-    },
-    "run": {
-
-    },
-    "set": {
-
-    },
-}
