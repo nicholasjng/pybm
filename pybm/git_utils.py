@@ -4,27 +4,33 @@ import subprocess
 from typing import List, Iterable, Tuple
 from pathlib import Path
 
-from pybm.exceptions import GitError
+from pybm.exceptions import GitError, ArgumentError
 
 MIN_VERSION = "min_version"
 OPTIONS = "options"
 
 _git_feature_versions = {
-    "add": {MIN_VERSION: (2, 6, 7),
-            OPTIONS: {
-                "-f": (2, 6, 7),
-                "--checkout": (2, 9, 5),
-                "--no-checkout": (2, 9, 5),
-                "--lock": (2, 13, 7),
-            }},
-    "list": {MIN_VERSION: (2, 7, 6),
-             OPTIONS: {
-                 "--porcelain": (2, 7, 6)
-             }},
-    "remove": {MIN_VERSION: (2, 17, 0),
-               OPTIONS: {
-                   "-f": (2, 17, 0)
-               }},
+    "add": {
+        MIN_VERSION: (2, 6, 7),
+        OPTIONS: {
+            "-f": (2, 6, 7),
+            "--checkout": (2, 9, 5),
+            "--no-checkout": (2, 9, 5),
+            "--lock": (2, 13, 7),
+        },
+    },
+    "list": {
+        MIN_VERSION: (2, 7, 6),
+        OPTIONS: {
+            "--porcelain": (2, 7, 6),
+        },
+    },
+    "remove": {
+        MIN_VERSION: (2, 17, 0),
+        OPTIONS: {
+            "-f": (2, 17, 0),
+        },
+    },
 }
 
 
@@ -44,26 +50,23 @@ def tfilter(fn, iterable: Iterable) -> Tuple:
     return tuple(filter(fn, iterable))
 
 
-def is_git_repository():
+def is_git_repository(path: str):
     # Check relative to current path, assumes everything is working.
-    return os.path.exists(".git")
+    # TODO: git worktrees contain a file called .git, does this still work?
+    return os.path.exists(os.path.join(path, ".git"))
 
 
 def get_repository_name():
     return Path.cwd().stem
 
 
-def is_valid_sha1_part(input_str: str, min_length: int = 7) -> bool:
-    # enforce a minimum length to help git resolve SHA1s, default is 7
-    if len(input_str) < min_length:
+def is_valid_sha1_part(input_str: str) -> bool:
+    try:
+        # valid SHA1s can be cast to a hex integer
+        _ = int(input_str, 16)
+    except ValueError:
         return False
-    else:
-        try:
-            # valid SHA1s can be cast to a hex integer
-            _ = int(input_str, 16)
-        except ValueError:
-            return False
-        return True
+    return True
 
 
 def resolve_to_ref(commit_ish: str, resolve_commits: bool):
@@ -126,6 +129,24 @@ def resolve_commit(ref: str) -> str:
                 ["git", "rev-list", "-n", "1", ref]).decode("utf-8")
     except subprocess.CalledProcessError as e:
         raise GitError(str(e))
+
+
+def disambiguate_info(info: str) -> str:
+    if os.path.exists(info):
+        attr = info
+    elif is_valid_sha1_part(info):
+        attr = "commit"
+    elif info in list_local_branches():
+        attr = "branch"
+    elif info in list_tags():
+        attr = "tag"
+    else:
+        # TODO: Display close matches if present
+        msg = f"argument {info} was not recognized as an attribute of an " \
+              f"existing environment worktree."
+        raise ArgumentError(msg)
+
+    return attr
 
 
 def git_worktree_feature_guard(command: List[str]):

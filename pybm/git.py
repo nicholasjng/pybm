@@ -1,12 +1,10 @@
 """Small Git worktree wrapper for operating on a repository via Python."""
-
+import os
 import subprocess
-from pathlib import Path
 from typing import Optional, List, Dict
-from pybm.exceptions import GitError
-from pybm.git_utils import lmap, get_repository_name, \
-    list_local_branches, resolve_commit, lfilter, resolve_to_ref, \
-    git_worktree_feature_guard
+from pybm.exceptions import GitError, ArgumentError
+from pybm.git_utils import lmap, get_repository_name, resolve_commit, \
+    lfilter, resolve_to_ref, git_worktree_feature_guard, disambiguate_info
 
 # small git flag database for worktree commands
 from pybm.subprocessing import CommandWrapperMixin
@@ -47,48 +45,28 @@ class GitWorktreeWrapper(CommandWrapperMixin):
     def run_command(self, command: str, *args, **kwargs) -> int:
         call_args = self.prepare_subprocess_args(command, *args, **kwargs)
         git_worktree_feature_guard(call_args)
-        return self.wrapped_subprocess_call(name="run",
+        return self.wrapped_subprocess_call("run",
                                             call_args=call_args,
                                             stdout=subprocess.DEVNULL,
                                             stderr=subprocess.PIPE,
                                             check=True,
                                             encoding="utf-8")
 
-    def get_worktree_by_name(self, name: str):
-        worktrees = self.list_worktrees()
-        try:
-            # absolute paths, match names against bottom level directories
-            wt = next(wt for wt in worktrees if wt["worktree"].endswith(name))
-        except StopIteration:
-            wt = None
-        return wt
-
-    def get_worktree_by_commit(self, commit_sha: str):
-        worktrees = self.list_worktrees()
-        try:
-            # partial matching commit SHA with `in`, returns first occurrence
-            wt = next(wt for wt in worktrees if commit_sha in wt["HEAD"])
-        except StopIteration:
-            wt = None
-        return wt
-
-    def get_worktree_by_branch(self, name: str):
-        worktrees = self.list_worktrees()
-        try:
-            # branches are in the form refs/heads/$BRANCH or "detached"
-            wt = next(wt for wt in worktrees if wt["branch"].split("/")[-1]
-                      == name)
-        except StopIteration:
-            wt = None
-        return wt
-
-    def get_worktree_by_ref_type(self, ref: str, ref_type: str):
-        handlers = {
-            "tag": lambda x: self.get_worktree_by_commit(resolve_commit(x)),
-            "branch": self.get_worktree_by_branch,
-            "commit": self.get_worktree_by_commit
+    def get_worktree_by_attr(self, attr: str, value: str):
+        attr_checkers = {
+            "worktree": lambda x: os.path.abspath(value) == x,
+            "HEAD": lambda x: value in x,
+            "branch": lambda x: x.split("/")[-1] == value,
+            "tag": lambda x: value in resolve_commit(x),
+            "commit": lambda x: value in x,
         }
-        return handlers.get(ref_type)(ref)
+        assert attr in attr_checkers, f"got illegal worktree attribute {attr}"
+        try:
+            match = attr_checkers.get(attr)
+            wt = next(wt for wt in self.list_worktrees() if match(wt[attr]))
+        except StopIteration:
+            wt = None
+        return wt
 
     def list_worktrees(self, porcelain: bool = True) -> List[Dict[str, str]]:
         attr_list = self.return_output("list",
@@ -105,7 +83,8 @@ class GitWorktreeWrapper(CommandWrapperMixin):
         attr_list = [attr_list[i:i + 3] for i in range(0, len(attr_list), 3)]
         return lmap(dict, attr_list)
 
-    def add_worktree(self, commit_ish: str, name: Optional[str] = None,
+    def add_worktree(self, commit_ish: str,
+                     dest: Optional[str] = None,
                      force: bool = False, checkout: bool = True,
                      lock: bool = False, resolve_commits: bool = False):
 
@@ -113,40 +92,31 @@ class GitWorktreeWrapper(CommandWrapperMixin):
                                        resolve_commits=resolve_commits)
 
         # check for existing worktree with the same spec
-        if not force and self.get_worktree_by_ref_type(ref, ref_type=ref_type):
+        if not force and self.get_worktree_by_attr(ref_type, ref):
             msg = f"Worktree for {ref_type} {commit_ish} already exists. " \
                   f"If you want to check out the same {ref_type} " \
                   f"multiple times, supply the -f/--force option to " \
                   f"`pybm create`."
-            raise GitError(msg)
+            raise ArgumentError(msg)
 
-        if not name:
+        if not dest:
             # TODO: Fallback if the designated directory exists
             # worktree name repo@<ref> in the current directory
             escaped = commit_ish.replace("/", "-")
-            name = "@".join([self.repository_name, escaped])
+            dest = "@".join([self.repository_name, escaped])
 
-        return self.run_command("add", name, ref, force=force,
+        return self.run_command("add", dest, ref, force=force,
                                 checkout=checkout, lock=lock)
 
     def remove_worktree(self, info: str, force=False):
-        # TODO: Improve info disambiguation - path match against repository
-        #  name, branch match local vs. remote, commit partial match
-        p = Path("./")
-        # All subdirectories in the current directory, not recursive.
-        all_subdirs = [f.stem for f in filter(Path.is_dir, p.iterdir())]
-        if info in all_subdirs:
-            wt, wt_id = self.get_worktree_by_name(info), "directory name"
-        elif info in list_local_branches():
-            wt, wt_id = self.get_worktree_by_branch(info), "branch name"
-        else:
-            wt, wt_id = self.get_worktree_by_commit(info), "commit"
+        attr = disambiguate_info(info)
 
+        wt = self.get_worktree_by_attr(attr, info)
         if not wt:
-            msg = f"Worktree with {wt_id} {info} does not exist."
-            raise GitError(msg)
+            msg = f"Worktree with associated identifier {info} does not exist."
+            raise ArgumentError(msg)
 
-        return self.run_command("remove", info, force=force)
+        return self.run_command("remove", wt["worktree"], force=force)
 
 
 git = GitWorktreeWrapper()
