@@ -26,19 +26,19 @@ class VenvBuilder(CommandWrapperMixin):
         # either the venv is created in a special home directory or straight
         # into the worktree
         super().__init__(command_db=_venv_flags, exception_type=VenvError)
-        self.venv_root = os.getenv("VENV_HOME", os.getcwd())
+        self.venv_root = os.getenv("VENV_HOME", None)
         self.venv_paths = []
 
-    def prepare_subprocess_args(self, executable: str, env_dir: str, **kwargs):
-        call_args = [executable, "-m", "venv", env_dir]
+    def prepare_subprocess_args(self, executable: str, module: str, *args,
+                                **kwargs):
+        call_args = [executable, "-m", module, *args]
         # parse venv command line options separately
         call_args += self.parse_flags(**kwargs)
         return call_args
 
     def create_environment(self, executable: str, env_dir: str, **kwargs) -> \
             int:
-        command = self.prepare_subprocess_args(executable=executable,
-                                               env_dir=env_dir,
+        command = self.prepare_subprocess_args(executable, "venv", env_dir,
                                                **kwargs)
         new_env_path = os.path.join(self.venv_root, env_dir)
         self.venv_paths.append(new_env_path)
