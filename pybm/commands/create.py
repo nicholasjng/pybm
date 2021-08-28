@@ -36,12 +36,6 @@ class CreateCommand(CLICommand):
                                  help="Force worktree creation. Useful for "
                                       "checking out a branch multiple times "
                                       "with different custom requirements.")
-        self.parser.add_argument("--no-checkout",
-                                 action="store_true",
-                                 default=False,
-                                 help="Skip worktree checkout after creation. "
-                                      "This can be used to sparsely "
-                                      "check out branches.")
         self.parser.add_argument("-R", "--resolve-commits",
                                  action="store_true",
                                  default=False,
@@ -50,22 +44,43 @@ class CreateCommand(CLICommand):
                                       "ref is a branch name, this detaches "
                                       "the HEAD (see https://git-scm.com/docs/"
                                       "git-checkout#_detached_head).")
-        self.parser.add_argument("--create-venv",
+        self.parser.add_argument("-t",
+                                 type="str",
+                                 default=None,
+                                 help="Name to tag the created "
+                                      "environment with (e.g. 'my-env'), "
+                                      "can be used to manage environments "
+                                      "from the command line as well (e.g. "
+                                      "in destroy, update commands).")
+        self.parser.add_argument("--no-checkout",
                                  action="store_true",
                                  default=False,
-                                 help="Create a virtual environment with "
-                                      "custom requirements.")
+                                 help="Skip worktree checkout after creation. "
+                                      "This can be used to sparsely "
+                                      "check out branches.")
+        self.parser.add_argument("-e", "--create-venv",
+                                 action="store_true",
+                                 default=False,
+                                 help="Create a Python virtual environment "
+                                      "to enable benchmarking with custom "
+                                      "requirements.")
         self.parser.add_argument("--python",
                                  type=str,
                                  default=None,
                                  help="Python interpreter to use in "
                                       "virtual environment construction.",
                                  metavar="<python>")
+        self.parser.add_argument("-r",
+                                 type="str",
+                                 default=None,
+                                 help="Requirements file for dependency "
+                                      "installation in the newly created "
+                                      "virtual environment.")
         self.parser.add_argument("--venv-options",
                                  type=str,
                                  default="",
-                                 help="Comma separated list of command line "
-                                      "options for virtual "
+                                 help="Comma-or-space-separated list of "
+                                      "command line options for virtual "
                                       "environment creation using venv. To "
                                       "get a comprehensive list of options, "
                                       "run `python -m venv -h`.",
@@ -73,8 +88,8 @@ class CreateCommand(CLICommand):
         self.parser.add_argument("--pip-options",
                                  type=str,
                                  default="",
-                                 help="Comma separated list of command line "
-                                      "options for dependency "
+                                 help="Comma-or-space-separated list of "
+                                      "command line options for dependency "
                                       "installation in the created virtual "
                                       "environment using pip. To get a "
                                       "comprehensive list of options, "
