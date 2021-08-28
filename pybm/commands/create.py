@@ -1,8 +1,9 @@
+import os
 import sys
 from typing import List
 
 from pybm.command import CLICommand
-from pybm.exceptions import GitError
+from pybm.exceptions import ArgumentError
 from pybm.git import git
 from pybm.git_utils import is_git_repository
 from pybm.status_codes import ERROR, SUCCESS
@@ -29,12 +30,6 @@ class CreateCommand(CLICommand):
                                  help="Destination directory to create for "
                                       "the new worktree. Defaults to "
                                       "repository-name@{commit|branch|tag}.")
-        self.parser.add_argument("--python",
-                                 type=str,
-                                 default=sys.executable,
-                                 help="Python interpreter to use in "
-                                      "virtual environment construction.",
-                                 metavar="<python>")
         self.parser.add_argument("-f", "--force",
                                  action="store_true",
                                  default=False,
@@ -55,6 +50,36 @@ class CreateCommand(CLICommand):
                                       "ref is a branch name, this detaches "
                                       "the HEAD (see https://git-scm.com/docs/"
                                       "git-checkout#_detached_head).")
+        self.parser.add_argument("--create-venv",
+                                 action="store_true",
+                                 default=False,
+                                 help="Create a virtual environment with "
+                                      "custom requirements.")
+        self.parser.add_argument("--python",
+                                 type=str,
+                                 default=None,
+                                 help="Python interpreter to use in "
+                                      "virtual environment construction.",
+                                 metavar="<python>")
+        self.parser.add_argument("--venv-options",
+                                 type=str,
+                                 default="",
+                                 help="Comma separated list of command line "
+                                      "options for virtual "
+                                      "environment creation using venv. To "
+                                      "get a comprehensive list of options, "
+                                      "run `python -m venv -h`.",
+                                 metavar="<venv-options>")
+        self.parser.add_argument("--pip-options",
+                                 type=str,
+                                 default="",
+                                 help="Comma separated list of command line "
+                                      "options for dependency "
+                                      "installation in the created virtual "
+                                      "environment using pip. To get a "
+                                      "comprehensive list of options, "
+                                      "run `python -m pip install -h`.",
+                                 metavar="<pip-options>")
 
     def run(self, args: List[str]):
         self.add_arguments()
@@ -70,11 +95,11 @@ class CreateCommand(CLICommand):
         if verbose:
             print(f"Parsed command line options: {var_dict}")
 
-        if not is_git_repository():
-            raise GitError("No git repository present in this path")
+        if not is_git_repository(os.getcwd()):
+            raise ArgumentError("No git repository present in this path.")
 
         git.add_worktree(var_dict["commit-ish"],
-                         name=var_dict["dest"],
+                         dest=var_dict["dest"],
                          force=var_dict["force"],
                          checkout=not var_dict["no_checkout"],
                          resolve_commits=var_dict["resolve_commits"]
