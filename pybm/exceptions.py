@@ -14,7 +14,7 @@ class GitError(ValueError):
     pass
 
 
-class VenvError(ValueError):
+class VenvBuilderError(ValueError):
     pass
 
 

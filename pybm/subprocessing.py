@@ -33,5 +33,5 @@ class CommandWrapperMixin:
             full_command = " ".join(call_args)
             msg = f"The command `{full_command}` returned the non-zero " \
                   f"exit code {e.returncode}.\nFurther information (" \
-                  f"output of the subprocess command):\n{e.output}"
+                  f"output of the subprocess command):\n{e.output or e.stderr}"
             raise self.exception_type(msg)
