@@ -1,5 +1,4 @@
 import argparse
-import sys
 from typing import Any, List
 
 from pybm.exceptions import ArgumentError, GitError, VenvError, \
@@ -46,8 +45,6 @@ class CLICommand:
             write_exception_info(e, origin="git")
         except VenvError as e:
             write_exception_info(e, origin="venv")
-        finally:
-            sys.exit(1)
 
     def run(self, args: List[Any]) -> int:
         """Execute the logic behind a run CLI command."""
