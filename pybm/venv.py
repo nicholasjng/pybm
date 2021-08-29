@@ -3,20 +3,13 @@ Virtual environment creation class for benchmarking
 with custom requirements in Python."""
 import os
 import shutil
-from typing import List
+from typing import List, Dict, Text
 
-from pybm.exceptions import VenvError
+from pybm.exceptions import VenvBuilderError
 from pybm.subprocessing import CommandWrapperMixin
+from pybm.venv_utils import split_option_string, get_python_version
 
-_venv_flags = {
-    "venv": {
-        "overwrite": {True: "--clear", False: None},
-        "upgrade_deps": {True: "--upgrade-deps", False: None}
-    },
-    "pip": {
-
-    },
-}
+EnvSpec = Dict[Text, Text]
 
 
 class VenvBuilder(CommandWrapperMixin):
@@ -25,28 +18,34 @@ class VenvBuilder(CommandWrapperMixin):
     def __init__(self):
         # either the venv is created in a special home directory or straight
         # into the worktree
-        super().__init__(command_db=_venv_flags, exception_type=VenvError)
-        self.venv_root = os.getenv("VENV_HOME", None)
+        super().__init__(command_db={}, exception_type=VenvBuilderError)
+        self.venv_root = os.getenv("VENV_HOME", "")
         self.venv_paths = []
 
-    def prepare_subprocess_args(self, executable: str, module: str, *args,
-                                **kwargs):
-        call_args = [executable, "-m", module, *args]
-        # parse venv command line options separately
-        call_args += self.parse_flags(**kwargs)
-        return call_args
+    def create_environment(self, executable: str, destination: str,
+                           option_string: str) -> EnvSpec:
 
-    def create_environment(self, executable: str, env_dir: str, **kwargs) -> \
-            int:
-        command = self.prepare_subprocess_args(executable, "venv", env_dir,
-                                               **kwargs)
-        new_env_path = os.path.join(self.venv_root, env_dir)
-        self.venv_paths.append(new_env_path)
-        return self.wrapped_subprocess_call("run", command, encoding="utf-8")
+        if self.venv_root == "":
+            env_dir = os.path.join(destination, "venv")
+        else:
+            env_dir = os.path.join(self.venv_root,
+                                   os.path.basename(destination))
+
+        command = [executable, "-m", "venv", env_dir]
+        command += split_option_string(option_string=option_string)
+
+        self.wrapped_subprocess_call("run", command, encoding="utf-8")
+
+        env_spec = {"path": env_dir,
+                    "python_version": get_python_version(executable)}
+        return env_spec
 
     @staticmethod
     def remove_environment(env_dir: str):
         shutil.rmtree(env_dir)
 
-    def install_packages(self, package_list: List[str]):
+    def install_packages(self, executable: str, package_list: List[str]):
         pass
+
+
+venv_builder = VenvBuilder()
