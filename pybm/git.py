@@ -1,7 +1,7 @@
 """Small Git worktree wrapper for operating on a repository via Python."""
 import os
 import subprocess
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Text, Union
 from pybm.exceptions import GitError, ArgumentError
 from pybm.git_utils import lmap, get_repository_name, resolve_commit, \
     lfilter, resolve_to_ref, git_worktree_feature_guard, disambiguate_info
@@ -18,6 +18,8 @@ _git_worktree_flags = {
     "remove": {"force": {True: "-f", False: None}}
 }
 
+Worktree = Dict[Text, Text]
+
 
 class GitWorktreeWrapper(CommandWrapperMixin):
     """Wrapper class for a Git-based benchmark environment creator."""
@@ -26,7 +28,6 @@ class GitWorktreeWrapper(CommandWrapperMixin):
         super().__init__(command_db=_git_worktree_flags,
                          exception_type=GitError)
         self.executable = "git"
-        self.worktrees = self.list_worktrees()
         self.repository_name = get_repository_name()
 
     def prepare_subprocess_args(self, command: str, *args, **kwargs):
@@ -52,7 +53,8 @@ class GitWorktreeWrapper(CommandWrapperMixin):
                                             check=True,
                                             encoding="utf-8")
 
-    def get_worktree_by_attr(self, attr: str, value: str):
+    def get_worktree_by_attr(self, attr: str, value: str) -> \
+            Union[Worktree, None]:
         attr_checkers = {
             "worktree": lambda x: os.path.abspath(value) == x,
             "HEAD": lambda x: value in x,
@@ -62,13 +64,14 @@ class GitWorktreeWrapper(CommandWrapperMixin):
         }
         assert attr in attr_checkers, f"got illegal worktree attribute {attr}"
         try:
-            match = attr_checkers.get(attr)
-            wt = next(wt for wt in self.list_worktrees() if match(wt[attr]))
+            match = attr_checkers[attr]
+            wt: Worktree = next(wt for wt in self.list_worktrees() if
+                                match(wt[attr]))
+            return wt
         except StopIteration:
-            wt = None
-        return wt
+            return None
 
-    def list_worktrees(self, porcelain: bool = True) -> List[Dict[str, str]]:
+    def list_worktrees(self, porcelain: bool = True) -> List[Worktree]:
         attr_list = self.return_output("list",
                                        porcelain=porcelain).splitlines()
         # git worktree porcelain lists are twice newline-terminated at the end,
@@ -84,7 +87,7 @@ class GitWorktreeWrapper(CommandWrapperMixin):
         return lmap(dict, attr_list)
 
     def add_worktree(self, commit_ish: str,
-                     dest: Optional[str] = None,
+                     destination: Optional[str] = None,
                      force: bool = False, checkout: bool = True,
                      lock: bool = False, resolve_commits: bool = False):
 
@@ -99,21 +102,24 @@ class GitWorktreeWrapper(CommandWrapperMixin):
                   f"`pybm create`."
             raise ArgumentError(msg)
 
-        if not dest:
-            # TODO: Fallback if the designated directory exists
+        if not destination:
             # worktree name repo@<ref> in the current directory
             escaped = commit_ish.replace("/", "-")
-            dest = "@".join([self.repository_name, escaped])
+            worktree_id = "@".join([self.repository_name, escaped])
+            destination = os.path.abspath(worktree_id)
 
-        return self.run_command("add", dest, ref, force=force,
-                                checkout=checkout, lock=lock)
+        self.run_command("add", destination, ref, force=force,
+                         checkout=checkout, lock=lock)
+
+        # return worktree by attribute search
+        return self.get_worktree_by_attr("worktree", destination)
 
     def remove_worktree(self, info: str, force=False):
         attr = disambiguate_info(info)
 
         wt = self.get_worktree_by_attr(attr, info)
-        if not wt:
-            msg = f"Worktree with associated identifier {info} does not exist."
+        if wt is None:
+            msg = f"Worktree with associated attribute {attr} does not exist."
             raise ArgumentError(msg)
 
         return self.run_command("remove", wt["worktree"], force=force)

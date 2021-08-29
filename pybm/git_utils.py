@@ -1,7 +1,7 @@
 import os
 import re
 import subprocess
-from typing import List, Iterable, Tuple
+from typing import List, Iterable, Tuple, Dict, Text, Callable, TypeVar, Any
 from pathlib import Path
 
 from pybm.exceptions import GitError, ArgumentError
@@ -9,44 +9,50 @@ from pybm.exceptions import GitError, ArgumentError
 MIN_VERSION = "min_version"
 OPTIONS = "options"
 
-_git_feature_versions = {
+T = TypeVar('T')
+S = TypeVar('S')
+
+# major, minor, micro
+VersionTuple = Tuple[int, int, int]
+OptionDict = Dict[Text, VersionTuple]
+GitCommandDict = Dict[Text, VersionTuple]
+GitFeatureDict = Dict[Text, OptionDict]
+
+_git_worktree_versions: GitCommandDict = {
+    "add": (2, 6, 7),
+    "list": (2, 7, 6),
+    "remove": (2, 17, 0),
+}
+
+_git_feature_versions: GitFeatureDict = {
     "add": {
-        MIN_VERSION: (2, 6, 7),
-        OPTIONS: {
-            "-f": (2, 6, 7),
-            "--checkout": (2, 9, 5),
-            "--no-checkout": (2, 9, 5),
-            "--lock": (2, 13, 7),
-        },
+        "-f": (2, 6, 7),
+        "--checkout": (2, 9, 5),
+        "--no-checkout": (2, 9, 5),
+        "--lock": (2, 13, 7),
     },
     "list": {
-        MIN_VERSION: (2, 7, 6),
-        OPTIONS: {
-            "--porcelain": (2, 7, 6),
-        },
+        "--porcelain": (2, 7, 6),
     },
     "remove": {
-        MIN_VERSION: (2, 17, 0),
-        OPTIONS: {
-            "-f": (2, 17, 0),
-        },
+        "-f": (2, 17, 0),
     },
 }
 
 
-def lmap(fn, iterable: Iterable):
+def lmap(fn: Callable[[S], T], iterable: Iterable[S]) -> List[T]:
     return list(map(fn, iterable))
 
 
-def tmap(fn, iterable: Iterable) -> Tuple:
+def tmap(fn: Callable[[S], T], iterable: Iterable[S]) -> Tuple[T, ...]:
     return tuple(map(fn, iterable))
 
 
-def lfilter(fn, iterable: Iterable) -> List:
+def lfilter(fn: Callable[[S], Any], iterable: Iterable[S]) -> List[S]:
     return list(filter(fn, iterable))
 
 
-def tfilter(fn, iterable: Iterable) -> Tuple:
+def tfilter(fn: Callable[[S], Any], iterable: Iterable[S]) -> Tuple[S, ...]:
     return tuple(filter(fn, iterable))
 
 
@@ -110,13 +116,17 @@ def list_local_branches():
         raise GitError(str(e))
 
 
-def get_git_version() -> Tuple[int]:
+def get_git_version() -> Tuple[int, ...]:
     try:
         output = subprocess.check_output(["git", "--version"]).decode("utf-8")
-        version_string = re.search(r'([\d.]+)', output).group()
-        return tmap(int, version_string.split("."))
     except subprocess.CalledProcessError as e:
         raise GitError(str(e))
+    version_string = re.search(r'([\d.]+)', output)
+    if version_string is not None:
+        version = version_string.group()
+        return tmap(int, version.split("."))
+    else:
+        raise GitError("unable to get version from git.")
 
 
 def resolve_commit(ref: str) -> str:
@@ -161,14 +171,14 @@ def git_worktree_feature_guard(command: List[str]):
                                                       f"worktree command " \
                                                       f"`{worktree_command}`"
 
-    command_data = _git_feature_versions[worktree_command]
-    min_version, options = command_data[MIN_VERSION], command_data[OPTIONS]
+    min_version: VersionTuple = _git_worktree_versions[worktree_command]
+    options: Dict[Text, VersionTuple] = _git_feature_versions[worktree_command]
     # log offending command or option for dynamic exception printing
     newest, dtype = worktree_command, "command"
 
     for k in lfilter(lambda x: x.startswith("-"), rest):
         if k in options:
-            contender = options[k]
+            contender: VersionTuple = options[k]
             if contender > min_version:
                 min_version = contender
                 newest, dtype = k, "option"
