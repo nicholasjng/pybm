@@ -18,6 +18,10 @@ class VenvBuilderError(ValueError):
     pass
 
 
+class PybmError(ValueError):
+    pass
+
+
 def write_exception_info(info: Exception, origin: str = None):
     if origin:
         info_str = f"Error using {origin}: {info}"

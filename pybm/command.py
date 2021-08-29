@@ -1,13 +1,13 @@
 import argparse
 from typing import Any, List
 
-from pybm.exceptions import ArgumentError, GitError, VenvError, \
+from pybm.exceptions import ArgumentError, GitError, VenvBuilderError, \
     write_exception_info
 
 
 class CLICommand:
     """CLI command base class."""
-    usage = None
+    usage = ""
 
     def __init__(self, name: str, **parser_kwargs):
         # command name
@@ -43,7 +43,7 @@ class CLICommand:
             write_exception_info(e)
         except GitError as e:
             write_exception_info(e, origin="git")
-        except VenvError as e:
+        except VenvBuilderError as e:
             write_exception_info(e, origin="venv")
 
     def run(self, args: List[Any]) -> int:

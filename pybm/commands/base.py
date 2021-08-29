@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import List
 
 from pybm.command import CLICommand
 from pybm import __version__
@@ -8,11 +8,10 @@ from pybm.status_codes import SUCCESS, ERROR
 
 class BaseCommand(CLICommand):
     """
-    The most common commands for pybm:
+    Commands:
 
-    pybm create  - Create a benchmarking environment.
-    pybm destroy - Remove a stale benchmarking environment.
-    pybm apply   - Run a benchmarking workflow specified in a YAML file.
+    env     - Create and manage benchmarking environments.
+    apply   - Run a benchmarking workflow specified in a YAML file.
     """
     usage = "pybm [--version] [-h, --help]"
 
@@ -23,8 +22,7 @@ class BaseCommand(CLICommand):
 
     def add_arguments(self):
         # special version action and version kwarg
-        self.parser.add_argument("-V",
-                                 "--version",
+        self.parser.add_argument("--version",
                                  action="version",
                                  help="show pybm version number and exit.",
                                  version=f"%(prog)s version {__version__}")
