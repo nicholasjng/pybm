@@ -1,9 +1,7 @@
 from .base import BaseCommand
-from .create import CreateCommand
-from .destroy import DestroyCommand
+from .env import EnvCommand
 
 command_db = {
     "base": BaseCommand(name=""),
-    "create": CreateCommand(name="create"),
-    "destroy": DestroyCommand(name="destroy")
+    "env": EnvCommand(name="env"),
 }
