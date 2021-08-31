@@ -1,16 +1,16 @@
-import os
 import sys
 from typing import List, Dict, Text, Any, Callable
 
 from pybm.command import CLICommand
-from pybm.exceptions import ArgumentError
+from pybm.env_store import Environment, EnvDB
 from pybm.git import git
-from pybm.git_utils import is_git_repository
 from pybm.status_codes import ERROR, SUCCESS
 from pybm.venv import venv_builder
 
 Options = Dict[Text, Any]
 EnvHandlers = Dict[Text, Callable[[Options, bool], int]]
+WORKSPACE = "workspace"
+PYTHON_ENV = "python_environment"
 
 
 class EnvCommand(CLICommand):
@@ -20,7 +20,7 @@ class EnvCommand(CLICommand):
     # TODO: Better formatting through argparse formatter subclass
     usage = "pybm env create <commit-ish> <dest> [<options>]\n" \
             "   or: pybm env delete <identifier> [<options>]\n" \
-            "   or: pybm env install <deps> [<options>]\n" \
+            "   or: pybm env install <packages> [<options>]\n" \
             "   or: pybm env list\n" \
             "   or: pybm env update <env> <attr> <value>\n"
 
@@ -44,17 +44,17 @@ class EnvCommand(CLICommand):
             self.parser.add_argument("-f", "--force",
                                      action="store_true",
                                      default=False,
-                                     help="Force worktree creation. Useful for "
-                                          "checking out a branch multiple "
-                                          "times with different custom "
-                                          "requirements.")
+                                     help="Force worktree creation. Useful "
+                                          "for checking out a branch "
+                                          "multiple times with different "
+                                          "custom requirements.")
             self.parser.add_argument("-R", "--resolve-commits",
                                      action="store_true",
                                      default=False,
-                                     help="Always resolve the given git ref to "
-                                          "its associated commit. If the given "
-                                          "ref is a branch name, this detaches "
-                                          "the HEAD "
+                                     help="Always resolve the given git "
+                                          "ref to its associated commit. "
+                                          "If the given ref is a branch "
+                                          "name, this detaches the HEAD "
                                           "(see https://git-scm.com/docs/"
                                           "git-checkout#_detached_head).")
             self.parser.add_argument("-t",
@@ -85,14 +85,15 @@ class EnvCommand(CLICommand):
             self.parser.add_argument("-C", "--create-venv",
                                      action="store_true",
                                      default=False,
-                                     help="Create a Python virtual environment "
-                                          "for the new pybm "
+                                     help="Create a Python virtual "
+                                          "environment for the new pybm "
                                           "environment to enable "
                                           "benchmarking with custom "
                                           "requirements. This directory is "
                                           "either added to the worktree "
                                           "directly, or into $PYBM_VENV_HOME "
-                                          "if the environment variable is set.")
+                                          "if the environment variable is "
+                                          "set.")
             self.parser.add_argument("--python",
                                      type=str,
                                      default=sys.executable,
@@ -101,11 +102,11 @@ class EnvCommand(CLICommand):
                                      metavar="<python>")
             self.parser.add_argument("--venv-options",
                                      type=str,
-                                     default="",
+                                     default=None,
                                      help="Comma- or space-separated list of "
                                           "command line options for virtual "
-                                          "environment creation using venv. To "
-                                          "get a comprehensive list of "
+                                          "environment creation using venv. "
+                                          "To get a comprehensive list of "
                                           "options, run `python -m venv -h`.",
                                      metavar="<venv-options>")
         elif subcommand == "delete":
@@ -122,6 +123,16 @@ class EnvCommand(CLICommand):
                                           "removing untracked files and "
                                           "changes in the process.")
         elif subcommand == "install":
+            self.parser.add_argument("packages",
+                                     nargs="*",
+                                     default=None,
+                                     metavar="<packages>",
+                                     help="Package dependencies to install "
+                                          "into the new virtual environment "
+                                          "using pip. All packages listed "
+                                          "must be either pinned (in the "
+                                          "format pkg==<semver-tag>) or "
+                                          "unpinned (package name only).")
             self.parser.add_argument("-r",
                                      type=str,
                                      default=None,
@@ -131,11 +142,12 @@ class EnvCommand(CLICommand):
                                           "virtual environment.")
             self.parser.add_argument("--pip-options",
                                      type=str,
-                                     default="",
+                                     default=None,
                                      help="Comma- or space-separated list of "
-                                          "command line options for dependency "
-                                          "installation in the created virtual "
-                                          "environment using pip. To get a "
+                                          "command line options for "
+                                          "dependency installation in the "
+                                          "created virtual environment "
+                                          "using `pip install`. To get a "
                                           "comprehensive list of options, "
                                           "run `python -m pip install -h`.",
                                      metavar="<pip-options>")
@@ -145,9 +157,6 @@ class EnvCommand(CLICommand):
             pass
 
     def create(self, options: Options, verbose: bool):
-        if not is_git_repository(os.getcwd()):
-            raise ArgumentError("No git repository present in this path.")
-
         commit_ish = options["commit-ish"]
         destination = options["dest"]
         force = options["force"]
@@ -163,25 +172,34 @@ class EnvCommand(CLICommand):
                               force=force,
                               checkout=checkout,
                               resolve_commits=resolve_commits)
-
         if verbose:
-            print(f"Created worktree spec: {wt}")
+            print(f"Created worktree with spec: {wt}")
+
+        env_spec = {}
 
         if create_venv:
             dest = wt["worktree"]
-            env_spec = venv_builder.create_environment(
-                python,
-                destination=dest,
-                option_string=venv_options)
+            env_spec = venv_builder.create(python, destination=dest,
+                                           option_string=venv_options)
             if verbose:
-                print(f"Created virtual environment spec: {env_spec}")
+                print(f"Created virtual environment with spec: {env_spec}")
+
+        if link_dir is not None:
+            env_spec = venv_builder.link_existing(link_dir)
+
+        environment: Environment = {
+            WORKSPACE: wt,
+            PYTHON_ENV: env_spec,
+        }
+
+        if verbose:
+            print(f"Created pybm environment: {environment}")
+
+        EnvDB.add(environment=environment)
 
         return SUCCESS
 
     def delete(self, options: Options, verbose: bool):
-        if not is_git_repository(os.getcwd()):
-            raise ArgumentError("No git repository present in this path.")
-
         identifier = options["identifier"]
         force = options["force"]
 
@@ -193,7 +211,9 @@ class EnvCommand(CLICommand):
         return SUCCESS
 
     def install(self, options: Options, verbose: bool):
-        pass
+        packages = options["packages"]
+        requirements_file = options["requirements_file"]
+        pip_options = options["pip_options"]
 
     def list(self, options: Options, verbose: bool):
         pass

@@ -34,8 +34,8 @@ class EnvironmentStore:
         if env is not None:
             env[attr] = new
         else:
-            raise PybmError(f"Environment with value {old} for "
-                            f"attribute {attr} not found.")
+            raise PybmError(f"No environment found with value {old} for "
+                            f"attribute {attr}.")
 
 
 EnvDB = EnvironmentStore()
