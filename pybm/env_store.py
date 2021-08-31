@@ -1,5 +1,7 @@
 from typing import Dict, List, Any, Text, Union
 
+from pybm.exceptions import PybmError
+
 Environment = Dict[Text, Any]
 
 
@@ -15,10 +17,9 @@ class EnvironmentStore:
 
     def get(self, attr: str, value: str) -> Union[Environment, None]:
         try:
-            env = next(e for e in self.environments if e[attr] == value)
+            return next(e for e in self.environments if e[attr] == value)
         except StopIteration:
-            env = None
-        return env
+            return None
 
     def delete(self, env: Environment):
         self.environments.remove(env)
@@ -30,7 +31,11 @@ class EnvironmentStore:
 
     def update(self, attr: str, old: str, new: str):
         env = self.get(attr, old)
-        env[attr] = new
+        if env is not None:
+            env[attr] = new
+        else:
+            raise PybmError(f"Environment with value {old} for "
+                            f"attribute {attr} not found.")
 
 
 EnvDB = EnvironmentStore()
