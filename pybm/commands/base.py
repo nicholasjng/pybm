@@ -10,21 +10,23 @@ class BaseCommand(CLICommand):
     """
     Commands:
 
-    env     - Create and manage benchmarking environments.
     apply   - Run a benchmarking workflow specified in a YAML file.
+    config  - Display and change pybm configuration values.
+    env     - Create and manage benchmarking environments.
+    init    - Initialize a git repository for pybm benchmarking.
+    report  - Report results of successful benchmarking runs.
+    run     - Run specified benchmarks in different environments.
     """
-    usage = "pybm [--version] [-h, --help]"
+    usage = "pybm <command> [<options>]"
 
-    def __init__(self, name: str):
-        super(BaseCommand, self).__init__(
-            name=name,
-        )
+    def __init__(self):
+        super(BaseCommand, self).__init__(name="")
 
     def add_arguments(self):
         # special version action and version kwarg
         self.parser.add_argument("--version",
                                  action="version",
-                                 help="show pybm version number and exit.",
+                                 help="Show pybm version and exit.",
                                  version=f"%(prog)s version {__version__}")
 
     def run(self, args: List[str]):
@@ -34,10 +36,9 @@ class BaseCommand(CLICommand):
             self.parser.print_help()
             return ERROR
 
-        opts = self.parser.parse_args(args)
-        verbose = opts.v
+        options = self.parser.parse_args(args)
 
-        if verbose:
-            print(vars(opts))
+        if options.verbose:
+            print(vars(options))
 
         return SUCCESS
