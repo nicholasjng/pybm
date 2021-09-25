@@ -1,12 +1,7 @@
-import os
-import sys
+__all__ = ["CommandError", "GitError", "BuilderError", "PybmError"]
 
 
 class CommandError(ValueError):
-    pass
-
-
-class ArgumentError(ValueError):
     pass
 
 
@@ -14,18 +9,9 @@ class GitError(ValueError):
     pass
 
 
-class VenvBuilderError(ValueError):
+class BuilderError(ValueError):
     pass
 
 
 class PybmError(ValueError):
     pass
-
-
-def write_exception_info(info: Exception, origin: str = None):
-    if origin:
-        info_str = f"Error using {origin}: {info}"
-    else:
-        info_str = f"Error: {info}"
-    sys.stderr.write(info_str)
-    sys.stderr.write(os.linesep)

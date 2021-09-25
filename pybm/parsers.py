@@ -16,7 +16,6 @@ def parse_args(args: List[str]) -> Tuple[str, List[str]]:
     for checking whether the given values for CLI options are actually
     valid.
     """
-
     # TODO: Refactor this branch based on likelihood of single option call
     # check block for pybm + single option call
     if len(args) < 2:
@@ -41,6 +40,6 @@ def parse_command(command_name: str) -> CLICommand:
     # unknown command
     if command_name not in command_db:
         # TODO: Print similar commands if any, or print options
-        raise CommandError(f"unknown command {command_name}")
+        raise CommandError(f"Unknown command {command_name}")
 
-    return command_db[command_name]
+    return command_db[command_name]()

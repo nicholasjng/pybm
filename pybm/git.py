@@ -1,18 +1,21 @@
 """Small Git worktree wrapper for operating on a repository via Python."""
-import os
-from typing import Optional, List, Dict, Text, Union, Tuple
-from pybm.exceptions import GitError, ArgumentError
-from pybm.git_utils import lmap, resolve_commit, \
-    lfilter, resolve_to_ref, disambiguate_info, get_git_version
-from pybm.path_utils import current_folder_name, get_subdirs
-from pybm.subprocessing import CommandWrapperMixin
+from pathlib import Path
+from typing import Optional, List, Tuple, Dict
+
+from pybm.config import PybmConfig
+from pybm.specs import Worktree
+from pybm.util.common import lmap, lfilter, version_string
+from pybm.exceptions import GitError
+from pybm.util.git import resolve_to_ref, disambiguate_info, get_git_version, \
+    is_git_repository
+from pybm.logging import get_logger
+from pybm.util.path import current_folder
+from pybm.mixins import SubprocessMixin
 
 # major, minor, micro
 VersionTuple = Tuple[int, int, int]
-OptionDict = Dict[Text, VersionTuple]
-GitCommandVersions = Dict[Text, VersionTuple]
-GitOptionVersions = Dict[Text, OptionDict]
-Worktree = Dict[Text, Text]
+GitCommandVersions = Dict[str, VersionTuple]
+GitOptionVersions = Dict[str, Dict[str, VersionTuple]]
 
 # minimum git versions for worktree commands
 _git_worktree_versions: GitCommandVersions = {
@@ -39,25 +42,22 @@ _git_option_versions: GitOptionVersions = {
 
 _git_worktree_flags = {
     "add": {"force": {True: "-f", False: None},
-            "checkout": {True: "--checkout", False: "--no-checkout"},
+            "checkout": {True: None, False: "--no-checkout"},
             "lock": {True: "--lock", False: None},
             },
     "list": {"porcelain": {True: "--porcelain", False: None}},
     "remove": {"force": {True: "-f", False: None}}
 }
 
+logger = get_logger(__name__)
 
-class GitWorktreeWrapper(CommandWrapperMixin):
+
+class GitWorktreeWrapper(SubprocessMixin):
     """Wrapper class for a Git-based benchmark environment creator."""
 
     def __init__(self):
         super().__init__(exception_type=GitError)
         self.command_db = _git_worktree_flags
-
-    @staticmethod
-    def is_git_repository(path: str):
-        subdirs = get_subdirs(path)
-        return ".git" in subdirs
 
     def prepare_subprocess_args(self, command: str, *args, **kwargs):
         call_args = ["git", "worktree", command, *args]
@@ -70,7 +70,8 @@ class GitWorktreeWrapper(CommandWrapperMixin):
         command_options = self.command_db[command]
         for k, v in kwargs.items():
             if k not in command_options:
-                # TODO: log bad kwarg usage somewhere
+                logger.debug(f"Encountered unknown command line option {k} "
+                             f"with value {v} for \"git worktree {command}\".")
                 continue
             cmd_opts = command_options[k]
             flag = cmd_opts[v]
@@ -82,134 +83,140 @@ class GitWorktreeWrapper(CommandWrapperMixin):
         command = self.prepare_subprocess_args(wt_command, *args, **kwargs)
         # check call args against git version
         self.feature_guard(command)
-
+        logger.debug("Running command \"{cmd}\"".format(cmd=" ".join(command)))
         return self.run_subprocess(command=command)
 
-    def get_worktree_by_attr(self, attr: str, value: str) -> \
-            Union[Worktree, None]:
-        attr_checkers = {
-            "worktree": lambda x: os.path.abspath(value) == x,
-            "HEAD": lambda x: value in x,
-            "branch": lambda x: x.split("/")[-1] == value,
-            "tag": lambda x: value in resolve_commit(x),
+    def get_worktree_by_attr(self, attr: str, value: str) \
+            -> Optional[Worktree]:
+        attr_checks = {
+            "root": lambda x: str(Path(value).resolve()) == x,
             "commit": lambda x: value in x,
+            "branch": lambda x: x.split("/")[-1] == value,
+            "tag": lambda x: x.split("/")[-1] == value,
         }
-        assert attr in attr_checkers, f"got illegal worktree attribute {attr}"
+        assert attr in attr_checks, f"illegal worktree attribute \"{attr}\""
+        # TODO: What to do if someone force-checks out the same ref twice?
         try:
-            match = attr_checkers[attr]
-            return next(wt for wt in self.list_worktrees() if match(wt[attr]))
+            match = attr_checks[attr]
+            return next(
+                wt for wt in self.list_worktrees() if match(getattr(wt, attr))
+            )
         except StopIteration:
             return None
 
-    @staticmethod
-    def make_worktree_spec(attribute_list: List[str]) -> Worktree:
-        # TODO: Choose better attribute names for environments than the git
-        #  defaults
-        wt_info: List[List[str]] = lmap(str.split, attribute_list)
-        wt: Worktree = {k: v for k, v in wt_info}
-        return wt
+    def feature_guard(self, command: List[str]) -> None:
+        wt_command, *rest = command[2:]
+        assert wt_command in self.command_db, \
+            f"unimplemented git worktree command \"{wt_command}\""
 
-    @staticmethod
-    def feature_guard(command: List[str]):
-        def version_string(x):
-            return ".".join(map(str, x))
-
-        assert len(command) > 2 and command[:2] == ["git", "worktree"], \
-            "internal git command construction error"
-
-        worktree_command, rest = command[2], command[2:]
-        assert worktree_command in _git_option_versions, \
-            f"unimplemented git worktree command `{worktree_command}`"
-
-        min_version = _git_worktree_versions[worktree_command]
-        options = _git_option_versions[worktree_command]
-        # log offending command or option for dynamic exception printing
-        newest = worktree_command
+        min_version = _git_worktree_versions[wt_command]
+        options = _git_option_versions[wt_command]
+        installed = get_git_version()
+        # log offender and type (command/switch) for dynamic errors
+        offender, of_type = wt_command, "command"
 
         for k in lfilter(lambda x: x.startswith("-"), rest):
             if k in options:
                 contender: VersionTuple = options[k]
                 if contender > min_version:
                     min_version = contender
-                    newest = k
-
-        installed = get_git_version()
+                    offender, of_type = k, "switch"
         if installed < min_version:
             full_command = " ".join(command)
-            min_string = version_string(min_version)
-            installed_string = version_string(installed)
-            identifier = "option" if newest.startswith("-") else "command"
-            msg = f"Running the command `{full_command}` requires a " \
-                  f"minimum git version of {min_string}, but your git " \
-                  f"version was found to be only {installed_string}. " \
-                  f"This version requirement is because the {identifier} " \
-                  f"`{newest}` was used, which was first introduced in " \
-                  f"git version {min_string}."
+            minimum = version_string(min_version)
+            actual = version_string(installed)
+            msg = f"Running the command {full_command}\" requires a " \
+                  f"minimum git version of {minimum}, but your git " \
+                  f"version was found to be only {actual}. " \
+                  f"This version requirement is because the {of_type} " \
+                  f"\"{offender}\" was used, which was first introduced in " \
+                  f"git version {minimum}."
             raise GitError(msg)
 
     def list_worktrees(self, porcelain: bool = True) -> List[Worktree]:
         _, output = self.run_command("list", porcelain=porcelain)
-        # git worktree porcelain lists are twice newline-terminated at the end,
-        # creating an empty string when applying str.splitlines()
+        # git worktree list porcelain outputs are twice newline-terminated
+        # at the end, creating an empty string when applying str.splitlines()
         attr_list = lfilter(lambda x: x != "", output.splitlines())
-        # detached HEADs have no associated branch, prepend the attribute so
-        # that we produce the same dictionary schema every time
-        attr_list = lmap(
-            lambda x: "branch " + x if x == "detached" else x,
-            attr_list)
-        # worktree attributes are directory, HEAD and branch
+        # split off the attribute names and just collect the data
+        attr_list = lmap(lambda x: x.split()[-1], attr_list)
         wt_list = [attr_list[i:i + 3] for i in range(0, len(attr_list), 3)]
-        return lmap(self.make_worktree_spec, wt_list)
+        return lmap(Worktree.from_list, wt_list)
 
     def add_worktree(self, commit_ish: str,
                      destination: Optional[str] = None,
                      force: bool = False,
                      checkout: bool = True,
                      lock: bool = False,
-                     resolve_commits: bool = False) -> Worktree:
-        current_directory = current_folder_name()
+                     resolve_commits: bool = False,
+                     verbose: bool = False):
+        current_directory = current_folder()
+        config = PybmConfig.load(".pybm/config.yaml")
 
-        if not self.is_git_repository(current_directory):
-            raise ArgumentError("No git repository present in this path.")
+        if not is_git_repository(current_directory):
+            raise GitError("No git repository present in this path.")
 
         ref, ref_type = resolve_to_ref(commit_ish,
                                        resolve_commits=resolve_commits)
+        if verbose:
+            print(f"Interpreting given git ref {commit_ish} "
+                  f"as a {ref_type} name.")
 
-        # check for existing worktree with the same spec
+        # check for existing worktree with the same ref
         if not force and self.get_worktree_by_attr(ref_type, ref):
             msg = f"Worktree for {ref_type} {commit_ish} already exists. " \
                   f"If you want to check out the same {ref_type} " \
                   f"multiple times, supply the -f/--force option to " \
-                  f"`pybm create`."
-            raise ArgumentError(msg)
+                  f"\"pybm create\"."
+            raise GitError(msg)
 
         if not destination:
-            # worktree name repo@<ref> in the current directory
+            # default worktree root repo@<ref> in the cwd
+            # TODO: Refactor this into a convenience function
             escaped = commit_ish.replace("/", "-")
-            worktree_id = "@".join([current_directory, escaped])
-            destination = os.path.abspath(worktree_id)
+            worktree_id = "@".join([current_directory.name, escaped])
+            # create relative to the desired directory
+            if config.get_value("git.createInParentDirectory"):
+                dest_dir = current_directory.parent
+            else:
+                dest_dir = current_directory
+            destination = str(dest_dir / worktree_id)
 
+        print(f"Adding worktree for ref \"{ref}\" in directory {destination}"
+              f".....", end="")
         self.run_command("add", destination, ref, force=force,
                          checkout=checkout, lock=lock)
+        print("done.")
 
         # return worktree by attribute search
-        wt = self.get_worktree_by_attr("worktree", destination)
+        wt = self.get_worktree_by_attr("root", destination)
         assert wt is not None, "internal error in git worktree construction"
         return wt
 
-    def remove_worktree(self, info: str, force=False) -> Worktree:
-        if not self.is_git_repository(current_folder_name()):
-            raise ArgumentError("No git repository present in this path.")
+    def remove_worktree(self, info: str, force=False, verbose: bool = False):
+        if not is_git_repository(current_folder()):
+            raise GitError("No git repository present in this path.")
 
         attr = disambiguate_info(info)
+        if verbose:
+            print(f"Given identifier {info} was determined to be "
+                  f"the \"{attr}\" attribute of the desired worktree.")
 
+        print(f"Attempting to match git worktree with "
+              f"{attr} \"{info}\".....", end="")
         wt = self.get_worktree_by_attr(attr, info)
         if wt is None:
-            msg = f"Worktree with associated attribute {attr} does not exist."
-            raise ArgumentError(msg)
+            print("failed.")
+            msg = f"Worktree with associated {attr} \"{info}\" " \
+                  f"does not exist."
+            raise GitError(msg)
+        print("success.")
 
-        self.run_command("remove", wt["worktree"], force=force)
-
+        ref, ref_type = wt.get_ref_and_type()
+        print(f"Matched worktree pointing to {ref_type} \"{ref}\".")
+        print(f"Removing worktree at location \"{wt.root}\".....", end="")
+        self.run_command("remove", wt.root, force=force)
+        print("done.")
         return wt
 
 
