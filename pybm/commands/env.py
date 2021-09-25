@@ -1,16 +1,18 @@
+import argparse
+from datetime import datetime
 import sys
-from typing import List, Dict, Text, Any, Callable
+from typing import List
 
+from pybm.builders.builder import PythonEnvBuilder
 from pybm.command import CLICommand
-from pybm.env_store import Environment, EnvDB
+from pybm.config import PybmConfig, get_builder_class
+from pybm.env_store import EnvironmentStore
+from pybm.exceptions import BuilderError, PybmError
 from pybm.git import git
+from pybm.logging import get_logger
 from pybm.status_codes import ERROR, SUCCESS
-from pybm.venv import venv_builder
 
-Options = Dict[Text, Any]
-EnvHandlers = Dict[Text, Callable[[Options, bool], int]]
-WORKSPACE = "workspace"
-PYTHON_ENV = "python_environment"
+logger = get_logger(__name__)
 
 
 class EnvCommand(CLICommand):
@@ -18,22 +20,34 @@ class EnvCommand(CLICommand):
     Create and manage pybm benchmark environments.
     """
     # TODO: Better formatting through argparse formatter subclass
-    usage = "pybm env create <commit-ish> <dest> [<options>]\n" \
+    usage = "pybm env create <commit-ish> <name> <dest> [<options>]\n" \
             "   or: pybm env delete <identifier> [<options>]\n" \
             "   or: pybm env install <packages> [<options>]\n" \
+            "   or: pybm env uninstall <packages> [<options>]\n" \
             "   or: pybm env list\n" \
             "   or: pybm env update <env> <attr> <value>\n"
 
-    def __init__(self, name: str):
-        super(EnvCommand, self).__init__(name=name)
+    def __init__(self):
+        super(EnvCommand, self).__init__(name="env")
+        config = PybmConfig.load(".pybm/config.yaml")
+        builder_class = get_builder_class(config)
+        self.builder: PythonEnvBuilder = builder_class(config)
 
     def add_arguments(self, subcommand: str = None):
         if subcommand == "create":
-            self.parser.add_argument("commit-ish",
+            self.parser.add_argument("commit_ish",
                                      metavar="<commit-ish>",
                                      help="Commit, branch or tag to create a "
                                           "git worktree for.")
-            self.parser.add_argument("dest",
+            self.parser.add_argument("name",
+                                     metavar="<name>",
+                                     nargs="?",
+                                     default=None,
+                                     help="Unique name for the created "
+                                          "environment. Can be used to "
+                                          "reference environments from "
+                                          "the command line.")
+            self.parser.add_argument("destination",
                                      metavar="<dest>",
                                      nargs="?",
                                      default=None,
@@ -57,15 +71,6 @@ class EnvCommand(CLICommand):
                                           "name, this detaches the HEAD "
                                           "(see https://git-scm.com/docs/"
                                           "git-checkout#_detached_head).")
-            self.parser.add_argument("-t",
-                                     type=str,
-                                     default=None,
-                                     metavar="<tag>",
-                                     help="Tag for the created "
-                                          "environment (e.g. 'my-env'). "
-                                          "Can be used to reference "
-                                          "environments from the command "
-                                          "line.")
             self.parser.add_argument("--no-checkout",
                                      action="store_true",
                                      default=False,
@@ -75,33 +80,23 @@ class EnvCommand(CLICommand):
             self.parser.add_argument("-L", "--link-existing",
                                      type=str,
                                      default=None,
+                                     dest="link_dir",
                                      metavar="<path-to-venv>",
                                      help="Link an existing Python virtual "
                                           "environment to the created pybm "
                                           "environment. Raises an error if "
-                                          "the path not exist or is not "
-                                          "recognized as a Python "
-                                          "environment.")
-            self.parser.add_argument("-C", "--create-venv",
-                                     action="store_true",
-                                     default=False,
-                                     help="Create a Python virtual "
-                                          "environment for the new pybm "
-                                          "environment to enable "
-                                          "benchmarking with custom "
-                                          "requirements. This directory is "
-                                          "either added to the worktree "
-                                          "directly, or into $PYBM_VENV_HOME "
-                                          "if the environment variable is "
-                                          "set.")
+                                          "the path does not exist or is not "
+                                          "recognized as a valid Python "
+                                          "virtual environment.")
             self.parser.add_argument("--python",
                                      type=str,
                                      default=sys.executable,
+                                     dest="python_executable",
                                      help="Python interpreter to use in "
                                           "virtual environment construction.",
                                      metavar="<python>")
             self.parser.add_argument("--venv-options",
-                                     type=str,
+                                     nargs="*",
                                      default=None,
                                      help="Comma- or space-separated list of "
                                           "command line options for virtual "
@@ -114,34 +109,41 @@ class EnvCommand(CLICommand):
                                      metavar="<identifier>",
                                      help="Information that uniquely "
                                           "identifies the environment. "
-                                          "Can be checked out "
-                                          "commit, branch name, directory, "
-                                          "or custom user-defined tags.")
+                                          "Can be name, checked out "
+                                          "commit/branch/tag name or "
+                                          "git worktree base directory.")
             self.parser.add_argument("-f", "--force",
                                      action="store_true",
-                                     help="Force worktree destruction, "
+                                     help="Force worktree removal, "
                                           "removing untracked files and "
                                           "changes in the process.")
         elif subcommand == "install":
+            self.parser.add_argument("identifier",
+                                     metavar="<identifier>",
+                                     help="Information that uniquely "
+                                          "identifies the environment. "
+                                          "Can be name, checked out "
+                                          "commit, branch name, directory, "
+                                          "or custom user-defined tags.")
             self.parser.add_argument("packages",
                                      nargs="*",
                                      default=None,
                                      metavar="<packages>",
                                      help="Package dependencies to install "
                                           "into the new virtual environment "
-                                          "using pip. All packages listed "
-                                          "must be either pinned (in the "
-                                          "format pkg==<semver-tag>) or "
-                                          "unpinned (package name only).")
+                                          "using pip. All packages must be "
+                                          "specified in a format "
+                                          "understandable to pip.")
             self.parser.add_argument("-r",
                                      type=str,
                                      default=None,
                                      metavar="<requirements>",
+                                     dest="requirements_file",
                                      help="Requirements file for dependency "
                                           "installation in the newly created "
                                           "virtual environment.")
             self.parser.add_argument("--pip-options",
-                                     type=str,
+                                     nargs="*",
                                      default=None,
                                      help="Comma- or space-separated list of "
                                           "command line options for "
@@ -151,81 +153,131 @@ class EnvCommand(CLICommand):
                                           "comprehensive list of options, "
                                           "run `python -m pip install -h`.",
                                      metavar="<pip-options>")
+        elif subcommand == "uninstall":
+            self.parser.add_argument("identifier",
+                                     metavar="<identifier>",
+                                     help="Information that uniquely "
+                                          "identifies the environment. "
+                                          "Can be name, checked out "
+                                          "commit, branch name, directory, "
+                                          "or custom user-defined tags.")
+            self.parser.add_argument("packages",
+                                     nargs="+",
+                                     metavar="<packages>",
+                                     help="Package dependencies to uninstall "
+                                          "from the benchmarking environment "
+                                          "using pip. All packages must be "
+                                          "specified in a format "
+                                          "understandable to pip.")
+            self.parser.add_argument("--pip-options",
+                                     nargs="*",
+                                     default=None,
+                                     help="Comma- or space-separated list "
+                                          "of command line options for "
+                                          "dependency removal in the "
+                                          "benchmarking environment "
+                                          "using `pip uninstall`. To get a "
+                                          "comprehensive list of options, "
+                                          "run `python -m pip uninstall -h`.",
+                                     metavar="<pip-options>")
         elif subcommand == "list":
             pass
         elif subcommand == "update":
             pass
 
-    def create(self, options: Options, verbose: bool):
-        commit_ish = options["commit-ish"]
-        destination = options["dest"]
-        force = options["force"]
-        checkout = not options["no_checkout"]
-        resolve_commits = options["resolve_commits"]
-        create_venv = options["create_venv"]
-        link_dir = options["link_existing"]
-        python = options["python"]
-        venv_options = options["venv_options"]
+    def create(self, options: argparse.Namespace, verbose: bool):
+        wt = None
+        print(f"Attempting to create benchmark environment for git ref "
+              f"{options.commit_ish!r}.")
+        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+            try:
+                wt = git.add_worktree(commit_ish=options.commit_ish,
+                                      destination=options.destination,
+                                      force=options.force,
+                                      checkout=not options.no_checkout,
+                                      resolve_commits=options.resolve_commits)
+                if options.link_dir is None:
+                    env_spec = self.builder.create(
+                        options.python_executable,
+                        destination=wt.root,
+                        options=options.venv_options)
+                else:
+                    env_spec = self.builder.link_existing(options.link_dir)
 
-        wt = git.add_worktree(commit_ish=commit_ish,
-                              destination=destination,
-                              force=force,
-                              checkout=checkout,
-                              resolve_commits=resolve_commits)
-        if verbose:
-            print(f"Created worktree with spec: {wt}")
+                _ = env_store.create(name=options.name,
+                                     workspace=wt,
+                                     venv=env_spec,
+                                     created=str(datetime.now()))
+                return SUCCESS
+            except BuilderError:
+                # venv building fails after git worktree creation -> remove
+                if wt is not None:
+                    git.remove_worktree(wt.root)
+                return ERROR
 
-        env_spec = {}
-
-        if create_venv:
-            dest = wt["worktree"]
-            env_spec = venv_builder.create(python, destination=dest,
-                                           option_string=venv_options)
-            if verbose:
-                print(f"Created virtual environment with spec: {env_spec}")
-
-        if link_dir is not None:
-            env_spec = venv_builder.link_existing(link_dir)
-
-        environment: Environment = {
-            WORKSPACE: wt,
-            PYTHON_ENV: env_spec,
-        }
-
-        if verbose:
-            print(f"Created pybm environment: {environment}")
-
-        EnvDB.add(environment=environment)
-
-        return SUCCESS
-
-    def delete(self, options: Options, verbose: bool):
-        identifier = options["identifier"]
-        force = options["force"]
-
-        wt = git.remove_worktree(identifier,
-                                 force=force)
-        if verbose:
-            print(f"Deleted worktree: {wt}")
+    def delete(self, options: argparse.Namespace, verbose: bool):
+        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+            name = options.identifier
+            print(f"Attempting to remove benchmark environment "
+                  f"with name {name!r}.")
+            # TODO: Allow deletion by attrs other than name
+            env_to_remove = env_store.delete("name", name)
+            env_name = env_to_remove.name
+            print(f"Found matching benchmarking environment {env_name!r}, "
+                  "starting removal.")
+            # Remove venv first LIFO style to avoid git problems
+            self.builder.delete(env_to_remove.get_value("venv.root"))
+            _ = git.remove_worktree(env_to_remove.get_value("workspace.root"),
+                                    force=options.force)
+            print(f"Successfully removed benchmarking environment "
+                  f"{env_name!r}.")
 
         return SUCCESS
 
-    def install(self, options: Options, verbose: bool):
-        packages = options["packages"]
-        requirements_file = options["requirements_file"]
-        pip_options = options["pip_options"]
+    def install(self, options: argparse.Namespace, verbose: bool):
+        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+            target_env = env_store.get("name", options.identifier)
+            new_pkgs = self.builder.install_packages(
+                root=target_env.get_value("venv.root"),
+                package_list=options.packages,
+                requirements_file=options.requirements_file,
+                options=options.pip_options,
+                verbose=verbose)
+            target_env.set_value("venv.packages", new_pkgs)
 
-    def list(self, options: Options, verbose: bool):
-        pass
+        return SUCCESS
 
-    def update(self, options: Options, verbose: bool):
-        pass
+    def uninstall(self, options: argparse.Namespace, verbose: bool):
+        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+            target_env = env_store.get("name", options.identifier)
+            new_pkgs = self.builder.uninstall_packages(
+                root=target_env.get_value("venv.root"),
+                package_list=options.packages,
+                options=options.pip_options,
+                verbose=verbose)
+            target_env.set_value("venv.packages", new_pkgs)
+
+        return SUCCESS
+
+    def list(self, options: argparse.Namespace, verbose: bool):
+        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+            for env in env_store.environments:
+                print(env)
+        return SUCCESS
+
+    def update(self, options: argparse.Namespace, verbose: bool):
+        raise PybmError("env updating is not implemented yet.")
+        # return ERROR
 
     def run(self, args: List[str]):
-        subcommand_handlers: EnvHandlers = {
+        logger.debug("Running command: \"{cmd}\"".format(
+            cmd=self.format_call(args)))
+
+        subcommand_handlers = {
             "create": self.create,
             "delete": self.delete,
             "install": self.install,
+            "uninstall": self.uninstall,
             "list": self.list,
             "update": self.update,
         }
@@ -237,10 +289,8 @@ class EnvCommand(CLICommand):
 
         self.add_arguments(subcommand=subcommand)
 
-        options: Options = vars(self.parser.parse_args(args))
+        options = self.parser.parse_args(args)
 
-        verbose: bool = options.pop("v")
-        if verbose:
-            print(f"Parsed command line options: {options}")
+        verbose: bool = options.verbose
 
         return subcommand_handlers[subcommand](options, verbose)
