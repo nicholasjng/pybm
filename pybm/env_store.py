@@ -1,41 +1,104 @@
-from typing import Dict, List, Any, Text, Union
+import datetime
+from typing import List, Any, Optional, Union
+import yaml
+from pathlib import Path
 
+from pybm.util.common import lmap
 from pybm.exceptions import PybmError
-
-Environment = Dict[Text, Any]
+from pybm.specs import Worktree, EnvSpec, BenchmarkEnvironment
 
 
 class EnvironmentStore:
-    """Environment database keeping track of the present benchmarking
+    """Environment context manager keeping track of the present benchmarking
     environments."""
 
-    def __init__(self):
-        self.environments: List[Environment] = []
+    def __init__(self, path: Union[str, Path], verbose: bool = False,
+                 missing_ok: bool = False):
+        self.env_file = Path(path)
+        self.verbose = verbose
+        self.missing_ok = missing_ok
+        self.environments: List[BenchmarkEnvironment] = []
 
-    def add(self, environment: Environment):
-        self.environments.append(environment)
+    def __enter__(self):
+        self.load()
+        return self
 
-    def get(self, attr: str, value: str) -> Union[Environment, None]:
-        try:
-            return next(e for e in self.environments if e[attr] == value)
-        except StopIteration:
-            return None
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # TODO: Handle exceptions
+        self.save()
 
-    def delete(self, env: Environment):
-        self.environments.remove(env)
-
-    def delete_by_attr(self, attr: str, value: str):
-        env = self.get(attr, value)
-        if env is not None:
-            self.delete(env)
-
-    def update(self, attr: str, old: str, new: str):
-        env = self.get(attr, old)
-        if env is not None:
-            env[attr] = new
+    def load(self):
+        # silence warning during `pybm init` specifically
+        if not self.env_file.exists():
+            if not self.missing_ok:
+                print("Warning: No environment configuration file found. "
+                      "To create a configuration file and discover "
+                      "existing environments, run `pybm init` "
+                      "from the root of your git repository.")
         else:
-            raise PybmError(f"No environment found with value {old} for "
-                            f"attribute {attr}.")
+            if self.verbose:
+                print("Loading benchmark environments from disk at location "
+                      f"{self.env_file}.....", end="")
+            with open(self.env_file, "r") as cfg:
+                envs = yaml.load(cfg, Loader=yaml.FullLoader)
+            if self.verbose:
+                print("done.")
+            self.environments = lmap(BenchmarkEnvironment.from_dict, envs)
 
+    def save(self):
+        envs = lmap(lambda x: x.to_dict(), self.environments)
+        if self.verbose:
+            print(f"Saving benchmark environments to disk at location "
+                  f"{self.env_file}.....", end="")
+        with open(self.env_file, "w") as cfg:
+            yaml.dump(envs, cfg)
+        if self.verbose:
+            print("done.")
 
-EnvDB = EnvironmentStore()
+    def create(self, name: Optional[str], workspace: Worktree, venv: EnvSpec,
+               created: str) -> BenchmarkEnvironment:
+        name = name or f"env_{len(self.environments) + 1}"
+        print(f"Creating benchmark environment \"{name}\".....", end="")
+        env = BenchmarkEnvironment(name=name,
+                                   workspace=workspace,
+                                   venv=venv,
+                                   created=created,
+                                   last_modified=created)
+        print("done.")
+        self.environments.append(env)
+        return env
+
+    def delete(self, attr: str, value: str) -> BenchmarkEnvironment:
+        env = self.get(attr, value)
+        self.environments.remove(env)
+        return env
+
+    def get(self, attr: str, value: Any) -> BenchmarkEnvironment:
+        if self.verbose:
+            display_attr = attr.replace(".", " ")
+            print(f"Attempting to match benchmarking environment with "
+                  f"{display_attr} {value}.....", end="")
+        try:
+            env = next(
+                e for e in self.environments if e.get_value(attr) == value)
+            if self.verbose:
+                print("success.")
+            return env
+        except StopIteration:
+            if self.verbose:
+                print("failed")
+            raise PybmError(f"No benchmark environment found with value"
+                            f" {value} for attribute `{attr}`.")
+
+    # def set(self, env: BenchmarkEnvironment, attr: str, value: Any):
+    #     # assumes the environment is still in the list
+    #     env.set_value(attr, value)
+
+    def update(self, name: str, attr: str, value: Any) -> None:
+        # TODO: Only some values (e.g. linked venv, workspace branch) make
+        #  sense to update. Filtering by admissible updates with a handler
+        #  scheme seems sensible
+        env_to_update = self.delete("name", name)
+        env_to_update.set_value(attr=attr, value=value)
+        env_to_update.set_value("last_modified", str(datetime.datetime.now()))
+        self.environments.append(env_to_update)
