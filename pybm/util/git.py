@@ -3,8 +3,8 @@ import subprocess
 from pathlib import Path
 from typing import List, Tuple, Dict, Union
 
-from pybm.util.common import lmap, lfilter, version_tuple
 from pybm.exceptions import GitError
+from pybm.util.common import lmap, lfilter, version_tuple
 
 
 def run_subprocess(command: List[str],

@@ -1,10 +1,11 @@
 import importlib
 import importlib.util
 import sys
-from pathlib import Path
+from importlib.abc import Loader
 from importlib.machinery import ModuleSpec
+from pathlib import Path
 from types import ModuleType
-from typing import Callable, Union
+from typing import Callable, Union, Optional
 
 from pybm.exceptions import PybmError
 
@@ -27,16 +28,19 @@ def import_module_from_source(source_path: Union[str, Path]) -> ModuleType:
     if py_name in sys.modules:
         # return loaded module
         return sys.modules[py_name]
-    spec: ModuleSpec = importlib.util.spec_from_file_location(py_name,
-                                                              source_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    spec: Optional[ModuleSpec] = importlib.util.spec_from_file_location(
+        py_name, source_path)
+    if spec is not None:
+        module = importlib.util.module_from_spec(spec)
+        assert isinstance(spec.loader, Loader)
+        spec.loader.exec_module(module)
+        return module
+    else:
+        raise PybmError(f"Could not import module {source_path}.")
 
 
 def import_func_from_source(source_path: str, fn_name: str) -> Callable:
     """Imports a function from a module provided as source file."""
-
     try:
         # Source:
         # https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
