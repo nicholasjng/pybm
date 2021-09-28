@@ -1,8 +1,7 @@
 from typing import List
 
-from pybm.command import CLICommand
 from pybm import __version__
-
+from pybm.command import CLICommand
 from pybm.status_codes import SUCCESS, ERROR
 
 

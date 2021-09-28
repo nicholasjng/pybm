@@ -1,15 +1,16 @@
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 from typing import List
 
+from pybm.builders import PythonEnvBuilder
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_builder_class
 from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
-from pybm.git import git
+from pybm.git import GitWorktreeWrapper
+from pybm.status_codes import SUCCESS
 from pybm.util.git import is_git_repository
 from pybm.util.path import get_subdirs
-from pybm.status_codes import SUCCESS
 
 
 class InitCommand(CLICommand):
@@ -41,22 +42,23 @@ class InitCommand(CLICommand):
                                        verbose: bool = False):
         with EnvironmentStore(env_path, verbose, True) as env_store:
             config = PybmConfig.load(cfg_path)
-            builder_class = get_builder_class(config)
-            for i, workspace in enumerate(git.list_worktrees()):
-                if "venv" in get_subdirs(workspace.root):
-                    venv_root = Path(workspace.root) / "venv"
-                    venv = builder_class(config).link_existing(venv_root,
-                                                               verbose=verbose)
+            builder_class: PythonEnvBuilder = get_builder_class(config)
+            git: GitWorktreeWrapper = GitWorktreeWrapper(config)
+            for i, worktree in enumerate(git.list_worktrees()):
+                if "venv" in get_subdirs(worktree.root):
+                    venv_root = Path(worktree.root) / "venv"
+                    python_spec = builder_class.link_existing(venv_root,
+                                                              verbose=verbose)
                 else:
                     # TODO: Enable auto-grabbing from venv home
                     raise PybmError(f"Virtual environment not found "
                                     f"for environment with root "
-                                    f"{workspace.root!r}.")
+                                    f"{worktree.root!r}.")
                 created = datetime.now()
                 fmt = config.get_value("core.datetimeFormatter")
                 env_store.create(name="root" if i == 0 else f"env_{i + 1}",
-                                 workspace=workspace,
-                                 venv=venv,
+                                 worktree=worktree,
+                                 python=python_spec,
                                  created=created.strftime(fmt))
 
     def run(self, args: List[str]) -> int:
