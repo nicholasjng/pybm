@@ -9,12 +9,12 @@ from pybm.mixins import StateMixin
 ConfigValue = Union[str, int, float]
 
 
-@dataclass
-class EnvSpec:
+@dataclass(frozen=True)
+class PythonSpec:
     """Dataclass representing a Python virtual environment specification."""
-    root: str = field()
     executable: str = field()
-    python_version: str = field()
+    version: str = field()
+    locations: List[str] = field(default_factory=list)
     packages: List[str] = field(default_factory=list)
 
 
@@ -48,23 +48,23 @@ class Worktree:
 class BenchmarkEnvironment(StateMixin):
     """Dataclass representing a benchmarking environment configuration."""
     name: str
-    workspace: Worktree
-    venv: EnvSpec
+    worktree: Worktree
+    python: PythonSpec
     created: str
     last_modified: str
 
     @classmethod
     def from_dict(cls, spec: Dict[str, Any]):
         return BenchmarkEnvironment(name=spec["name"],
-                                    workspace=Worktree(**spec["workspace"]),
-                                    venv=EnvSpec(**spec["venv"]),
+                                    worktree=Worktree(**spec["worktree"]),
+                                    python=PythonSpec(**spec["python"]),
                                     created=spec["created"],
                                     last_modified=spec["last_modified"])
 
     def to_dict(self):
         return {"name": self.name,
-                "workspace": asdict(self.workspace),
-                "venv": asdict(self.venv),
+                "worktree": asdict(self.worktree),
+                "python": asdict(self.python),
                 "created": self.created,
                 "last_modified": self.last_modified}
 
@@ -80,24 +80,25 @@ class CoreGroup:
 
 
 @dataclass
+class GitGroup:
+    createWorktreeInParentDirectory: bool = True
+
+
+@dataclass
 class RunnerGroup:
-    className: str = "pybm.runners.GoogleBenchmarkRunner"
+    className: str = "pybm.runners.TimeitBenchmarkRunner"
+    requiredPackages: str = ""
     resultDirectory: str = "results"
     failFast: bool = False
+    numRepetitions: int = 1
     contextProviders: str = ""
     GoogleBenchmarkWithRandomInterleaving: bool = True
-    GoogleBenchmarkNumRepetitions: int = 0
     GoogleBenchmarkSaveAggregatesOnly: bool = True
 
 
 @dataclass
-class WorkspaceGroup:
-    createInParentDirectory: bool = True
-
-
-@dataclass
 class BuilderGroup:
-    className: str = "pybm.builders.PythonStdlibBuilder"
+    className: str = "pybm.builders.StdlibBuilder"
     homeDirectory: str = ""
     localWheelCaches: str = ""
     persistentVenvOptions: str = ""
@@ -107,4 +108,5 @@ class BuilderGroup:
 
 @dataclass
 class ReporterGroup:
-    pass
+    className: str = "pybm.reporters.StdlibReporter"
+    requiredPackages: str = ""

@@ -1,5 +1,5 @@
 import inspect
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any
 
 
 def is_context_provider(func: Callable) -> bool:
@@ -12,12 +12,12 @@ def is_context_provider(func: Callable) -> bool:
     return takes_no_args and has_correct_annotation
 
 
-def is_valid_timeit_target(func: Callable) -> bool:
+def is_valid_timeit_target(func_obj: Any) -> bool:
     """Check whether a function is a valid target for timeit benchmarking
     with the standard library benchmark runner."""
-    # TODO: Eventually, allow timeit methods taking arguments via some
-    #  expression parsing
-    func_sig = inspect.signature(func)
+    is_func = inspect.isfunction(func_obj)
+    if not is_func:
+        return False
+    func_sig = inspect.signature(func_obj)
     takes_no_args = not bool(func_sig.parameters)
     return takes_no_args
-

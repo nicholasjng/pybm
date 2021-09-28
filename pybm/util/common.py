@@ -1,7 +1,9 @@
-from typing import List, Iterable, Tuple, Callable, TypeVar
+from typing import List, Iterable, Tuple, Callable, TypeVar, Dict
 
 T = TypeVar('T')
 S = TypeVar('S')
+U = TypeVar('U')
+V = TypeVar('V')
 
 
 def lmap(fn: Callable[[S], T], iterable: Iterable[S]) -> List[T]:
@@ -34,8 +36,26 @@ def tpartition(fn: Callable[[S], bool], iterable: Iterable[S]) -> \
     return true_list, false_list
 
 
-def split_list(_l: list, n: int):
-    return [_l[:n], _l[n:]]
+def dkmap(fn: Callable[[S], T], dictionary: Dict[S, U]) -> Dict[T, U]:
+    return {fn(k): v for k, v in dictionary.items()}
+
+
+def dvmap(fn: Callable[[U], T], dictionary: Dict[S, U]) -> Dict[S, T]:
+    return {k: fn(v) for k, v in dictionary.items()}
+
+
+def dmap(fn: Callable[[Tuple[S, T]], Tuple[U, V]], dictionary: Dict[S, T]) \
+        -> Dict[U, V]:
+    return {k: v for k, v in tmap(fn, dictionary.items())}
+
+
+def dfilter(fn: Callable[[Tuple[S, T]], bool], dictionary: Dict[S, T]) \
+        -> Dict[S, T]:
+    return {k: v for k, v in tfilter(fn, dictionary.items())}
+
+
+def split_list(_l: List[T], n: int) -> Tuple[List[T], List[T]]:
+    return _l[:n], _l[n:]
 
 
 def version_tuple(version: str):
