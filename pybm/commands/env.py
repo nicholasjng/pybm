@@ -1,16 +1,17 @@
 import argparse
-from datetime import datetime
 import sys
+from datetime import datetime
 from typing import List
 
 from pybm.builders.builder import PythonEnvBuilder
 from pybm.command import CLICommand
-from pybm.config import PybmConfig, get_builder_class
+from pybm.config import PybmConfig, get_builder_class, get_runner_requirements
 from pybm.env_store import EnvironmentStore
 from pybm.exceptions import BuilderError, PybmError
-from pybm.git import git
+from pybm.git import GitWorktreeWrapper
 from pybm.logging import get_logger
 from pybm.status_codes import ERROR, SUCCESS
+from pybm.util.print import format_environments
 
 logger = get_logger(__name__)
 
@@ -30,8 +31,9 @@ class EnvCommand(CLICommand):
     def __init__(self):
         super(EnvCommand, self).__init__(name="env")
         config = PybmConfig.load(".pybm/config.yaml")
-        builder_class = get_builder_class(config)
-        self.builder: PythonEnvBuilder = builder_class(config)
+        self.config = config
+        self.builder: PythonEnvBuilder = get_builder_class(config)
+        self.git: GitWorktreeWrapper = GitWorktreeWrapper(config)
 
     def add_arguments(self, subcommand: str = None):
         if subcommand == "create":
@@ -186,33 +188,44 @@ class EnvCommand(CLICommand):
             pass
 
     def create(self, options: argparse.Namespace, verbose: bool):
-        wt = None
+        wt, python_spec = None, None
         print(f"Attempting to create benchmark environment for git ref "
               f"{options.commit_ish!r}.")
         with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
             try:
-                wt = git.add_worktree(commit_ish=options.commit_ish,
-                                      destination=options.destination,
-                                      force=options.force,
-                                      checkout=not options.no_checkout,
-                                      resolve_commits=options.resolve_commits)
+                wt = self.git.add_worktree(
+                    commit_ish=options.commit_ish,
+                    destination=options.destination,
+                    force=options.force,
+                    checkout=not options.no_checkout,
+                    resolve_commits=options.resolve_commits)
                 if options.link_dir is None:
-                    env_spec = self.builder.create(
+                    python_spec = self.builder.create(
                         options.python_executable,
                         destination=wt.root,
                         options=options.venv_options)
                 else:
-                    env_spec = self.builder.link_existing(options.link_dir)
+                    python_spec = self.builder.link_existing(options.link_dir)
+
+                # installing runner requirements and pybm
+                required = get_runner_requirements(config=self.config)
+                required.append("git+https://github.com/nicholasjng/pybm")
+                pkgs = self.builder.install_packages(
+                    python_spec.executable,
+                    package_list=required,
+                    verbose=verbose
+                )
+                python_spec.packages.extend(pkgs)
 
                 _ = env_store.create(name=options.name,
-                                     workspace=wt,
-                                     venv=env_spec,
+                                     worktree=wt,
+                                     python=python_spec,
                                      created=str(datetime.now()))
                 return SUCCESS
             except BuilderError:
                 # venv building fails after git worktree creation -> remove
                 if wt is not None:
-                    git.remove_worktree(wt.root)
+                    self.git.remove_worktree(wt.root)
                 return ERROR
 
     def delete(self, options: argparse.Namespace, verbose: bool):
@@ -227,8 +240,9 @@ class EnvCommand(CLICommand):
                   "starting removal.")
             # Remove venv first LIFO style to avoid git problems
             self.builder.delete(env_to_remove.get_value("venv.root"))
-            _ = git.remove_worktree(env_to_remove.get_value("workspace.root"),
-                                    force=options.force)
+            _ = self.git.remove_worktree(
+                env_to_remove.get_value("worktree.root"),
+                force=options.force)
             print(f"Successfully removed benchmarking environment "
                   f"{env_name!r}.")
 
@@ -238,12 +252,12 @@ class EnvCommand(CLICommand):
         with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
             target_env = env_store.get("name", options.identifier)
             new_pkgs = self.builder.install_packages(
-                root=target_env.get_value("venv.root"),
+                executable=target_env.get_value("python.executable"),
                 package_list=options.packages,
                 requirements_file=options.requirements_file,
                 options=options.pip_options,
                 verbose=verbose)
-            target_env.set_value("venv.packages", new_pkgs)
+            target_env.set_value("python.packages", new_pkgs)
 
         return SUCCESS
 
@@ -251,18 +265,18 @@ class EnvCommand(CLICommand):
         with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
             target_env = env_store.get("name", options.identifier)
             new_pkgs = self.builder.uninstall_packages(
-                root=target_env.get_value("venv.root"),
+                executable=target_env.get_value("python.executable"),
                 package_list=options.packages,
                 options=options.pip_options,
                 verbose=verbose)
-            target_env.set_value("venv.packages", new_pkgs)
+            target_env.set_value("python.packages", new_pkgs)
 
         return SUCCESS
 
-    def list(self, options: argparse.Namespace, verbose: bool):
+    @staticmethod
+    def list(options: argparse.Namespace, verbose: bool):
         with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
-            for env in env_store.environments:
-                print(env)
+            format_environments(env_store.environments)
         return SUCCESS
 
     def update(self, options: argparse.Namespace, verbose: bool):
