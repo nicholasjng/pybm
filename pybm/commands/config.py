@@ -6,7 +6,6 @@ from typing import List, Optional
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_all_names
 from pybm.exceptions import PybmError
-
 from pybm.status_codes import ERROR, SUCCESS
 from pybm.util.common import lpartition
 
@@ -91,6 +90,7 @@ class ConfigCommand(CLICommand):
 
     @staticmethod
     def list(options: argparse.Namespace, verbose: bool) -> int:
+        del verbose  # unused
         config = PybmConfig.load(".pybm/config.yaml")
         for name in get_all_names(config):
             group = config.get_value(name)
@@ -101,8 +101,16 @@ class ConfigCommand(CLICommand):
             print("")
         return SUCCESS
 
-    def describe(self, options: argparse.Namespace, verbose: bool) -> int:
-        pass
+    @staticmethod
+    def describe(options: argparse.Namespace, verbose: bool) -> int:
+        del verbose  # unused
+        attr = options.option
+        if "__" in attr:
+            raise PybmError("Only unprivileged configuration attributes can "
+                            "be described via `pybm config describe`.")
+        config = PybmConfig.load(".pybm/config.yaml")
+        config.describe(attr)
+        return SUCCESS
 
     def run(self, args: List[str]):
         subcommand_handlers = {
