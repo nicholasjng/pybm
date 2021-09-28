@@ -1,20 +1,20 @@
 """
 Virtual environment creation class for benchmarking
 with custom requirements in Python."""
-from pathlib import Path
 import shutil
+from pathlib import Path
 from typing import List, Optional, Union
 
 from pybm.builders import PythonEnvBuilder
 from pybm.config import PybmConfig
-from pybm.specs import EnvSpec
-from pybm.util.common import lmap, version_string
 from pybm.exceptions import BuilderError
+from pybm.specs import PythonSpec
+from pybm.util.common import version_string
 
 
 # TODO: Subclass directly from venv.EnvBuilder instead of going the
 #  subprocess route
-class PythonStdlibBuilder(PythonEnvBuilder):
+class StdlibBuilder(PythonEnvBuilder):
     """Python standard library virtual environment builder class."""
 
     def __init__(self, config: PybmConfig):
@@ -30,12 +30,13 @@ class PythonStdlibBuilder(PythonEnvBuilder):
     def create(self,
                executable: str,
                destination: str,
-               options: Optional[List[str]] = None) -> EnvSpec:
+               options: Optional[List[str]] = None,
+               verbose: bool = False) -> PythonSpec:
         # create the venv in the worktree or in a special home directory
         if self.venv_home == "":
             env_dir = Path(destination) / "venv"
         else:
-            env_dir = (Path(self.venv_home) / destination).parent.resolve()
+            env_dir = (Path(self.venv_home) / destination).resolve()
 
         command = [executable, "-m", "venv", str(env_dir)]
         option_list = []
@@ -53,14 +54,13 @@ class PythonStdlibBuilder(PythonEnvBuilder):
 
         executable = self.get_executable(env_dir)
         python_version = version_string(self.get_python_version(executable))
-        return EnvSpec(root=str(env_dir),
-                       executable=executable,
-                       python_version=python_version,
-                       packages=self.list_packages(executable))
+        return PythonSpec(executable=executable,
+                          version=python_version,
+                          packages=self.list_packages(executable))
 
     @staticmethod
-    def delete(env_dir: str) -> None:
-        def onerror(ex_type, value, traceback):
+    def delete(env_dir: Union[str, Path], verbose: bool = False) -> None:
+        def onerror(ex_type, value, _):
             print("failed.")
             print(f"Attempt to remove virtual environment raised an exception "
                   f"of type {ex_type}:")
@@ -77,31 +77,34 @@ class PythonStdlibBuilder(PythonEnvBuilder):
                       verbose: bool = False):
         print(f"Attempting to link existing virtual environment in location "
               f"{env_dir}.....")
-        path = Path(self.venv_home) / env_dir
+        if (Path(self.venv_home) / env_dir).exists():
+            path = Path(self.venv_home) / env_dir
+        else:
+            path = Path(env_dir)
         if not self.is_valid_venv(path, verbose=verbose):
             msg = f"The specified path {env_dir} was not recognized " \
                   f"as a valid virtual environment, since no `python`/" \
                   f"`pip` executables or symlinks were discovered."
             raise BuilderError(msg)
-        print(f"Successfully linked existing virtual environment in location "
-              f"{env_dir}.")
+
         executable = self.get_executable(env_dir)
         python_version = version_string(self.get_python_version(executable))
-        return EnvSpec(root=str(env_dir),
-                       executable=executable,
-                       python_version=python_version,
-                       packages=self.list_packages(executable))
+        packages = self.list_packages(executable, verbose=verbose)
+        print(f"Successfully linked existing virtual environment in location "
+              f"{env_dir}.")
+        return PythonSpec(executable=executable,
+                          version=python_version,
+                          packages=packages)
 
     def install_packages(self,
-                         root: str,
+                         executable: str,
                          packages: Optional[List[str]] = None,
                          requirements_file: Optional[str] = None,
                          options: Optional[List[str]] = None,
                          verbose: bool = False):
-        executable = self.get_executable(root)
         command = [executable, "-m", "pip", "install"]
         if packages is not None:
-            packages = packages
+            pass
         elif requirements_file is not None:
             req_path = Path(requirements_file)
             if not req_path.exists():
@@ -124,21 +127,22 @@ class PythonStdlibBuilder(PythonEnvBuilder):
             option_list += [f"--find-links={loc}" for loc in cache_locations]
         command += list(set(option_list))
 
-        print(f"Installing packages `{packages}` into virtual environment"
-              f" in location {root}.....", end="")
+        location = Path(executable).parents[1]
+        pkgs = ", ".join(packages)
+        print(f"Installing packages {pkgs} into virtual environment"
+              f" in location {location}.....", end="")
         self.run_subprocess(command)
         # this only runs if the subprocess succeeds
         print("done.")
-        print("Successfully installed packages {pkgs}".format(
-            pkgs=", ".join(packages)))
+        print(f"Successfully installed packages {pkgs} into virtual "
+              f"environment in location {location}.")
         return self.list_packages(executable=executable)
 
     def uninstall_packages(self,
-                           root: str,
+                           executable: str,
                            packages: List[str],
                            options: Optional[List[str]] = None,
                            verbose: bool = False):
-        executable = self.get_executable(root=root)
         command = [executable, "-m", "pip", "uninstall", *packages]
         option_list = []
         if options is not None:
@@ -148,21 +152,23 @@ class PythonStdlibBuilder(PythonEnvBuilder):
         command += list(set(option_list))
 
         pkgs = ", ".join(packages)
+        location = Path(executable).parents[1]
         print(f"Uninstalling packages {pkgs} from virtual environment"
-              f" in location {root}.....", end="")
+              f" in location {location}.....", end="")
         self.run_subprocess(command)
         # this only runs if the subprocess succeeds
         print("done.")
         print(f"Successfully uninstalled packages {pkgs} from virtual "
-              f"environment in location {root}.")
+              f"environment in location {location}.")
         return self.list_packages(executable=executable)
 
-    def list_packages(self, executable: str) -> List[str]:
-        command = [executable, "-m", "pip", "list"]
+    def list_packages(self, executable: str,
+                      verbose: bool = False) -> List[str]:
+        command = [executable, "-m", "pip", "list", "--format=freeze"]
 
         rc, pip_output = self.run_subprocess(command, print_status=False)
 
-        flat_pkg_table = pip_output.splitlines()
+        return pip_output.splitlines()
         # `pip list` output: table header, separator, package list
-        _, packages = flat_pkg_table[0], flat_pkg_table[2:]
-        return lmap(lambda x: "==".join(x.split()[:2]), packages)
+        # _, packages = flat_pkg_table[0], flat_pkg_table[2:]
+        # return lmap(lambda x: "==".join(x.split()[:2]), packages)

@@ -5,7 +5,7 @@ from typing import Optional, List, Union, Tuple
 from pybm import PybmConfig
 from pybm.exceptions import BuilderError
 from pybm.mixins import SubprocessMixin
-from pybm.specs import EnvSpec
+from pybm.specs import PythonSpec
 from pybm.util.common import version_tuple
 from pybm.util.path import get_subdirs, list_contents
 
@@ -14,24 +14,26 @@ class PythonEnvBuilder(SubprocessMixin):
     """Base class for all Python virtual environment builders."""
 
     def __init__(self, config: PybmConfig):
-        super().__init__(exception_type=BuilderError)
+        super().__init__()
         self.wheel_caches: str = config.get_value("builder.localWheelCaches")
 
     def create(self,
                executable: str,
                destination: str,
-               options: Optional[List[str]] = None) -> EnvSpec:
+               options: Optional[List[str]] = None,
+               verbose: bool = False) -> PythonSpec:
         raise NotImplementedError
 
     @staticmethod
-    def delete(env_dir: str) -> None:
+    def delete(env_dir: str, verbose: bool = False) -> None:
         raise NotImplementedError
 
-    def link_existing(self, path: str) -> EnvSpec:
+    def link_existing(self, env_dir: Union[str, Path],
+                      verbose: bool = False) -> PythonSpec:
         raise NotImplementedError
 
     def install_packages(self,
-                         root: str,
+                         executable: str,
                          package_list: Optional[List[str]] = None,
                          requirements_file: Optional[str] = None,
                          options: Optional[List[str]] = None,
@@ -39,16 +41,17 @@ class PythonEnvBuilder(SubprocessMixin):
         raise NotImplementedError
 
     def uninstall_packages(self,
-                           root: str,
+                           executable: str,
                            package_list: List[str],
                            options: Optional[List[str]] = None,
                            verbose: bool = False):
         raise NotImplementedError
 
-    def list_packages(self, executable: str):
+    def list_packages(self, executable: str, verbose: bool = False):
         raise NotImplementedError
 
-    def get_python_version(self, executable: str) -> Tuple[int, int, int]:
+    def get_python_version(self,
+                           executable: str) -> Tuple[int, int, int]:
         cmd = "import sys; print('{0}.{1}.{2}'.format(*sys.version_info[:3]))"
         command = [executable, "-c", cmd]
         rc, output = self.run_subprocess(command, print_status=False)
