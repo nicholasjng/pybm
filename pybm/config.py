@@ -1,16 +1,23 @@
 import itertools
 import pathlib
-import yaml
-from pathlib import Path
 from dataclasses import dataclass, asdict
+from pathlib import Path
 from typing import Union, Dict, List
+
+import yaml
 
 from pybm.exceptions import PybmError
 from pybm.mixins import StateMixin
-from pybm.specs import CoreGroup, BuilderGroup, RunnerGroup, WorkspaceGroup
+from pybm.specs import CoreGroup, BuilderGroup, RunnerGroup, GitGroup
 from pybm.util.imports import import_from_module
 
-__all__ = ["PybmConfig", "get_builder_class", "get_runner_class"]
+__all__ = ["PybmConfig",
+           "get_builder_class",
+           "get_runner_class",
+           "get_runner_requirements",
+           "get_reporter_class",
+           "get_all_names",
+           "get_all_keys"]
 
 Descriptions = Dict[str, str]
 
@@ -18,7 +25,7 @@ Descriptions = Dict[str, str]
 @dataclass
 class PybmConfig(StateMixin):
     core: CoreGroup = CoreGroup()
-    git: WorkspaceGroup = WorkspaceGroup()
+    git: GitGroup = GitGroup()
     runner: RunnerGroup = RunnerGroup()
     builder: BuilderGroup = BuilderGroup()
 
@@ -34,7 +41,7 @@ class PybmConfig(StateMixin):
             spec = yaml.load(config_file, Loader=yaml.FullLoader)
         return PybmConfig(
             core=CoreGroup(**spec["core"]),
-            git=WorkspaceGroup(**spec["git"]),
+            git=GitGroup(**spec["git"]),
             runner=RunnerGroup(**spec["runner"]),
             builder=BuilderGroup(**spec["builder"]))
 
@@ -48,17 +55,35 @@ class PybmConfig(StateMixin):
         with open(path, "w") as config_file:
             yaml.dump(self.to_dict(), config_file)
 
+    def describe(self, attr):
+        current = self.get_value(attr)
+        group, name = attr.split(".")
+        annotations: Dict[str, type] = self.get_value(group +
+                                                      ".__annotations__")
+        value_type = annotations[name].__name__
+        print(f"Describing configuration option {attr!r}.")
+        print(f"Value type:    {value_type}")
+        print(f"Current value: {current!r}")
+        print(description_db[group][name])
+
 
 def get_builder_class(config: PybmConfig):
-    return import_from_module(config.get_value("builder.className"))
+    class_name = import_from_module(config.get_value("builder.className"))
+    return class_name(config)
 
 
 def get_runner_class(config: PybmConfig):
-    return import_from_module(config.get_value("runner.className"))
+    class_name = import_from_module(config.get_value("runner.className"))
+    return class_name(config)
 
 
 def get_reporter_class(config: PybmConfig):
-    return import_from_module(config.get_value("reporter.className"))
+    class_name = import_from_module(config.get_value("reporter.className"))
+    return class_name(config)
+
+
+def get_runner_requirements(config: PybmConfig):
+    return get_runner_class(config).required_packages
 
 
 def get_all_names(cls) -> List[str]:
@@ -90,25 +115,26 @@ description_db: Dict[str, Descriptions] = {
                             "documentation on logging formatters: "
                             "https://docs.python.org/3/library/"
                             "logging.html#formatter-objects.",
-        "version": "The current pybm version. Can be used to pin a specific "
-                   "pybm version, guarding against failures when "
-                   "benchmarking introduced by breaking changes in pybm.",
+        "version": "The currently installed version of pybm.",
     },
     "git": {
-        "createInParentDirectory": "Whether to create worktrees in the "
-                                   "parent directory of your git repository "
-                                   "by default. Some IDEs get confused when "
-                                   "you initialize another git worktree "
-                                   "inside your main repository, so this "
-                                   "option provides a way to keep your main "
-                                   "repo folder clean without having to "
-                                   "explicitly type \"../my-dir\" "
-                                   "every time you create a git worktree.",
+        "createWorktreeInParentDirectory": "Whether to create worktrees "
+                                           "in the parent directory of "
+                                           "your git repository by default. "
+                                           "Some IDEs may get confused "
+                                           "when you initialize another "
+                                           "git worktree inside your main "
+                                           "repository, so this option "
+                                           "provides a way to keep your main "
+                                           "repo folder clean without having "
+                                           "to explicitly type \"../my-dir\" "
+                                           "every time you create a git "
+                                           "worktree.",
     },
     "builder": {
         "className": "Name of the builder class used in pybm to build "
                      "virtual Python environments. If you want to supply "
-                     "your own custom builder class, edit this value to "
+                     "your own custom builder class, set this value to "
                      "point to your custom subclass of "
                      "pybm.builders.PythonEnvBuilder.",
         "homeDirectory": "Optional home directory containing pre-built "
@@ -118,28 +144,28 @@ description_db: Dict[str, Descriptions] = {
                          "to link existing environments as subdirectories "
                          "of this location.",
         "localWheelCaches": "A string of local directories separated by "
-                            "colons (\":\"), like a Unix path variable,"
+                            "colons (\":\"), like a Unix PATH variable,"
                             "containing prebuilt wheels for Python packages. "
                             "Set this if you request a package that has no "
                             "wheels for your Python version or architecture "
                             "available, and have to build target-specific "
                             "wheels yourself.",
         "persistentPipInstallOptions": "Comma-separated list of options "
-                                       "passed to `pip install` in any "
+                                       "passed to `pip install` in a "
                                        "pip-based builder. Set this if you "
                                        "use a number of `pip install` "
                                        "options consistently, and do not want "
                                        "to type them out in every call to "
                                        "`pybm env install`.",
         "persistentPipUninstallOptions": "Comma-separated list of options "
-                                       "passed to `pip uninstall` in any "
-                                       "pip-based builder. Set this if you "
-                                       "use a number of `pip uninstall` "
-                                       "options consistently, and do not want "
-                                       "to type them out in every call to "
-                                       "`pybm env uninstall`.",
+                                         "passed to `pip uninstall` in a "
+                                         "pip-based builder. Set this if you "
+                                         "use a number of `pip uninstall` "
+                                         "options consistently, and do not "
+                                         "want to type them out in every "
+                                         "call to `pybm env uninstall`.",
         "persistentVenvOptions": "Comma-separated list of options "
-                                 "for virtual environment creation in any "
+                                 "for virtual environment creation in a "
                                  "builder using venv. Set this if you "
                                  "use a number of `python -m venv` "
                                  "options consistently, and do not want "
@@ -147,6 +173,10 @@ description_db: Dict[str, Descriptions] = {
                                  "`pybm env create`.",
     },
     "runner": {
-        "className": "",
+        "className": "Name of the runner class used in pybm to run "
+                     "benchmarks inside Python virtual environments. If you "
+                     "want to supply your own custom runner class, set this "
+                     "value to point to your custom subclass of "
+                     "pybm.runners.BenchmarkRunner.",
     },
 }

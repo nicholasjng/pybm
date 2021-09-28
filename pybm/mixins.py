@@ -12,11 +12,8 @@ logger = get_logger(__name__)
 class SubprocessMixin:
     """Useful utilities for CLI command wrappers such as for git, venv."""
 
-    def __init__(self, exception_type: type):
-        self.exception_type = exception_type
-
-    def run_subprocess(self,
-                       command: List[str],
+    @staticmethod
+    def run_subprocess(command: List[str],
                        reraise_on_error: bool = True,
                        print_status: bool = True,
                        **subprocess_kwargs) -> Tuple[int, str]:
@@ -38,7 +35,7 @@ class SubprocessMixin:
                 if not reraise_on_error:
                     print(msg)
             if reraise_on_error:
-                raise self.exception_type(msg)
+                raise PybmError(msg)
         return rc, p.stdout
 
 

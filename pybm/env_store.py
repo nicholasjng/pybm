@@ -1,11 +1,12 @@
 import datetime
-from typing import List, Any, Optional, Union
-import yaml
 from pathlib import Path
+from typing import List, Any, Optional, Union
 
-from pybm.util.common import lmap
+import yaml
+
 from pybm.exceptions import PybmError
-from pybm.specs import Worktree, EnvSpec, BenchmarkEnvironment
+from pybm.specs import Worktree, PythonSpec, BenchmarkEnvironment
+from pybm.util.common import lmap
 
 
 class EnvironmentStore:
@@ -55,13 +56,13 @@ class EnvironmentStore:
         if self.verbose:
             print("done.")
 
-    def create(self, name: Optional[str], workspace: Worktree, venv: EnvSpec,
-               created: str) -> BenchmarkEnvironment:
+    def create(self, name: Optional[str], worktree: Worktree,
+               python: PythonSpec, created: str) -> BenchmarkEnvironment:
         name = name or f"env_{len(self.environments) + 1}"
         print(f"Creating benchmark environment \"{name}\".....", end="")
         env = BenchmarkEnvironment(name=name,
-                                   workspace=workspace,
-                                   venv=venv,
+                                   worktree=worktree,
+                                   python=python,
                                    created=created,
                                    last_modified=created)
         print("done.")
@@ -95,9 +96,9 @@ class EnvironmentStore:
     #     env.set_value(attr, value)
 
     def update(self, name: str, attr: str, value: Any) -> None:
-        # TODO: Only some values (e.g. linked venv, workspace branch) make
-        #  sense to update. Filtering by admissible updates with a handler
-        #  scheme seems sensible
+        # TODO: Only some values (e.g. linked venv, worktree branch) make
+        #  sense to update. Filter by admissible updates with a handler
+        #  scheme
         env_to_update = self.delete("name", name)
         env_to_update.set_value(attr=attr, value=value)
         env_to_update.set_value("last_modified", str(datetime.datetime.now()))

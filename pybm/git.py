@@ -3,14 +3,14 @@ from pathlib import Path
 from typing import Optional, List, Tuple, Dict
 
 from pybm.config import PybmConfig
+from pybm.exceptions import GitError
+from pybm.logging import get_logger
+from pybm.mixins import SubprocessMixin
 from pybm.specs import Worktree
 from pybm.util.common import lmap, lfilter, version_string
-from pybm.exceptions import GitError
 from pybm.util.git import resolve_to_ref, disambiguate_info, get_git_version, \
     is_git_repository
-from pybm.logging import get_logger
 from pybm.util.path import current_folder
-from pybm.mixins import SubprocessMixin
 
 # major, minor, micro
 VersionTuple = Tuple[int, int, int]
@@ -55,9 +55,11 @@ logger = get_logger(__name__)
 class GitWorktreeWrapper(SubprocessMixin):
     """Wrapper class for a Git-based benchmark environment creator."""
 
-    def __init__(self):
-        super().__init__(exception_type=GitError)
+    def __init__(self, config: PybmConfig):
+        super().__init__()
         self.command_db = _git_worktree_flags
+        self.create_in_parent = config.get_value(
+            "git.createWorktreeInParentDirectory")
 
     def prepare_subprocess_args(self, command: str, *args, **kwargs):
         call_args = ["git", "worktree", command, *args]
@@ -151,7 +153,6 @@ class GitWorktreeWrapper(SubprocessMixin):
                      resolve_commits: bool = False,
                      verbose: bool = False):
         current_directory = current_folder()
-        config = PybmConfig.load(".pybm/config.yaml")
 
         if not is_git_repository(current_directory):
             raise GitError("No git repository present in this path.")
@@ -171,12 +172,12 @@ class GitWorktreeWrapper(SubprocessMixin):
             raise GitError(msg)
 
         if not destination:
-            # default worktree root repo@<ref> in the cwd
+            # default worktree root name is repo@<ref>
             # TODO: Refactor this into a convenience function
             escaped = commit_ish.replace("/", "-")
             worktree_id = "@".join([current_directory.name, escaped])
             # create relative to the desired directory
-            if config.get_value("git.createInParentDirectory"):
+            if self.create_in_parent:
                 dest_dir = current_directory.parent
             else:
                 dest_dir = current_directory
@@ -213,11 +214,8 @@ class GitWorktreeWrapper(SubprocessMixin):
         print("success.")
 
         ref, ref_type = wt.get_ref_and_type()
-        print(f"Matched worktree pointing to {ref_type} \"{ref}\".")
-        print(f"Removing worktree at location \"{wt.root}\".....", end="")
+        print(f"Matched worktree pointing to {ref_type} {ref!r}.")
+        print(f"Removing worktree at location {wt.root}.....", end="")
         self.run_command("remove", wt.root, force=force)
         print("done.")
         return wt
-
-
-git = GitWorktreeWrapper()
