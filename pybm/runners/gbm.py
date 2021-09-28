@@ -1,70 +1,86 @@
-from typing import List, Union, Optional, Sequence
+import sys
+
+import google_benchmark as gbm
+from absl import app
+from typing import List, Union, Optional
 from pathlib import Path
 
 from pybm.config import PybmConfig
-from pybm.runners.runner import BenchmarkRunner, ContextProvider
+from pybm.runners.runner import BenchmarkRunner
 from pybm.specs import BenchmarkEnvironment
+from pybm.util.common import lfilter
+
+
+def flags_parser(argv: List[str]):
+    argv = gbm.initialize(argv)
+    return app.parse_flags_with_usage(argv)
 
 
 class GoogleBenchmarkRunner(BenchmarkRunner):
     """
-    A benchmark runner class interface designed to dispatch benchmarking
-    runs in pybm using Google Benchmark.
+    A benchmark runner class interface designed to dispatch benchmark runs
+    in pybm using Google Benchmark's Python bindings.
     """
 
     def __init__(self, config: PybmConfig):
         super().__init__(config=config)
-        self.num_repetitions: int = config.get_value(
-            "runner.GoogleBenchmarkNumRepetitions")
+        self.required_packages = ["google-benchmark"]
         self.with_interleaving: bool = config.get_value(
             "runner.GoogleBenchmarkWithRandomInterleaving")
         self.aggregates_only: bool = config.get_value(
-            "runner.GoogleBenchmarkSaveAggregatesOnly"
-        )
+            "runner.GoogleBenchmarkSaveAggregatesOnly")
 
     def create_flags(
             self,
-            out_file: Union[str, Path],
+            result_file: Union[str, Path],
+            num_repetitions: int = 1,
             benchmark_filter: Optional[str] = None,
-            context_providers: Optional[Sequence[ContextProvider]] = None,
-    ) -> List[str]:
-        # JSON is the only supported file format in GBM
-        flags = [f"--benchmark_out={out_file}",
-                 "--benchmark_out_format=json"]
-        if benchmark_filter is not None:
-            flags.append(f"--benchmark_filter={benchmark_filter}")
-        if self.num_repetitions > 0:
-            flags.append(f"--benchmark_repetitions={self.num_repetitions}")
+            benchmark_context: Optional[List[str]] = None) -> List[str]:
+        flags = super(GoogleBenchmarkRunner, self).create_flags(
+            result_file=result_file,
+            num_repetitions=num_repetitions,
+            benchmark_filter=benchmark_filter,
+            benchmark_context=benchmark_context
+        )
         if self.with_interleaving:
             flags.append("--benchmark_enable_random_interleaving=true")
-        # Add benchmark context information like shown in
-        # https://github.com/google/benchmark/blob/main/docs/user_guide.md#extra-context
-        if context_providers is not None:
-            for context_provider in context_providers:
-                name, value = context_provider()
-                flags.append(f"--benchmark_context={name}={value}")
+        if self.aggregates_only:
+            flags.append("--benchmark_report_aggregates_only")
         return flags
 
-    def run_benchmarks(
+    def dispatch(
             self,
-            benchmarks: Sequence[str],
+            benchmarks: List[str],
             environment: BenchmarkEnvironment,
-            benchmark_filter: str = None,
-            context_providers: Optional[Sequence[ContextProvider]] = None):
+            repetitions: int = 1,
+            benchmark_filter: Optional[str] = None,
+            benchmark_context: Optional[List[str]] = None):
         self.check_required_packages(environment=environment)
+        result_dir = self.create_result_dir(environment=environment)
 
         # stupid name, only used for printing below
         n = len(benchmarks)
-        for i, target in enumerate(benchmarks):
-            ref, _ = environment.workspace.get_ref_and_type()
-            out_dir = Path(self.output_dir) / ref
-            out_dir.mkdir(parents=True, exist_ok=True)
-            out_name = Path(target).stem + "_results.json"
-            command = [environment.venv.executable, target]
+        for i, benchmark in enumerate(benchmarks):
+            print(f"Running benchmark {benchmark}.....[{i + 1}/{n}]")
+            python = environment.get_value("python.executable")
+            worktree_root = environment.get_value("worktree.root")
+            result_name = Path(benchmark).stem + "_results.json"
+            command = [python, benchmark]
             command += self.create_flags(
-                out_file=out_dir / out_name,
+                result_file=result_dir / result_name,
+                num_repetitions=repetitions,
                 benchmark_filter=benchmark_filter,
-                context_providers=context_providers
+                benchmark_context=benchmark_context,
             )
-            print(f"Running benchmark {target}.....[{i + 1}/{n}]")
-            self.run_subprocess(command=command, print_status=True)
+            self.run_subprocess(command=command, cwd=worktree_root)
+
+    def run_benchmark(self, args: List[str] = None):
+        argv = args or sys.argv
+        # inject environment-specific context into args
+        argv += self.get_current_context()
+        context = lfilter(lambda x: x.startswith("--benchmark_context"), argv)
+        self.validate_context(context)
+
+        argv = gbm.initialize(argv)
+        return app.run(gbm.run_benchmarks, argv=argv,
+                       flags_parser=flags_parser)
