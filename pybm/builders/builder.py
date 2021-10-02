@@ -15,17 +15,22 @@ class PythonEnvBuilder(SubprocessMixin):
 
     def __init__(self, config: PybmConfig):
         super().__init__()
-        self.wheel_caches: str = config.get_value("builder.localWheelCaches")
+        self.ex_type = BuilderError
+        self.wheel_caches = []
+        wheel_cache_string: str = config.get_value(
+            "builder.localWheelCaches")
+        if wheel_cache_string != "":
+            self.wheel_caches = wheel_cache_string.split(":")
 
     def create(self,
-               executable: str,
-               destination: str,
+               executable: Union[str, Path],
+               destination: Union[str, Path],
                options: Optional[List[str]] = None,
                verbose: bool = False) -> PythonSpec:
         raise NotImplementedError
 
     @staticmethod
-    def delete(env_dir: str, verbose: bool = False) -> None:
+    def delete(env_dir: Union[str, Path], verbose: bool = False) -> None:
         raise NotImplementedError
 
     def link_existing(self, env_dir: Union[str, Path],
@@ -34,17 +39,17 @@ class PythonEnvBuilder(SubprocessMixin):
 
     def install_packages(self,
                          executable: str,
-                         package_list: Optional[List[str]] = None,
+                         packages: Optional[List[str]] = None,
                          requirements_file: Optional[str] = None,
                          options: Optional[List[str]] = None,
-                         verbose: bool = False) -> List[str]:
+                         verbose: bool = False) -> None:
         raise NotImplementedError
 
     def uninstall_packages(self,
                            executable: str,
-                           package_list: List[str],
+                           packages: List[str],
                            options: Optional[List[str]] = None,
-                           verbose: bool = False):
+                           verbose: bool = False) -> None:
         raise NotImplementedError
 
     def list_packages(self, executable: str, verbose: bool = False):

@@ -20,41 +20,55 @@ class StdlibBuilder(PythonEnvBuilder):
     def __init__(self, config: PybmConfig):
         super().__init__(config=config)
         self.venv_home: str = config.get_value("builder.homeDirectory")
-        self.venv_options: str = config.get_value(
+
+        # persistent venv options
+        self.venv_options: List[str] = []
+        venv_option_string: str = config.get_value(
             "builder.persistentVenvOptions")
-        self.pip_install_options: str = config.get_value(
+        if venv_option_string != "":
+            self.venv_options = venv_option_string.split(",")
+
+        # persistent pip install options
+        self.pip_install_options: List[str] = []
+        pip_install_option_string: str = config.get_value(
             "builder.persistentPipInstallOptions")
-        self.pip_uninstall_options: str = config.get_value(
+        if pip_install_option_string != "":
+            self.pip_install_options = pip_install_option_string.split(",")
+
+        # persistent pip uninstall options
+        self.pip_uninstall_options: List[str] = []
+        pip_uninstall_option_string: str = config.get_value(
             "builder.persistentPipUninstallOptions")
+        if pip_uninstall_option_string != "":
+            self.pip_uninstall_options = \
+                pip_uninstall_option_string.split(",")
 
     def create(self,
-               executable: str,
-               destination: str,
+               executable: Union[str, Path],
+               destination: Union[str, Path],
                options: Optional[List[str]] = None,
                verbose: bool = False) -> PythonSpec:
+        options = options or []
         # create the venv in the worktree or in a special home directory
         if self.venv_home == "":
             env_dir = Path(destination) / "venv"
         else:
             env_dir = (Path(self.venv_home) / destination).resolve()
 
-        command = [executable, "-m", "venv", str(env_dir)]
-        option_list = []
-        if options is not None:
-            option_list += options
-        if self.venv_options != "":
-            option_list += self.venv_options.split(",")
-
+        command = [str(executable), "-m", "venv", str(env_dir)]
+        options += self.venv_options
         # Prevent duplicate options
-        command += list(set(option_list))
+        command += list(set(options))
         print(f"Creating virtual environment in directory {env_dir}.....",
               end="")
         self.run_subprocess(command)
         print("done.")
 
+        root = str(Path(executable).parents[1])
         executable = self.get_executable(env_dir)
         python_version = version_string(self.get_python_version(executable))
-        return PythonSpec(executable=executable,
+        return PythonSpec(root=root,
+                          executable=executable,
                           version=python_version,
                           packages=self.list_packages(executable))
 
@@ -75,6 +89,7 @@ class StdlibBuilder(PythonEnvBuilder):
     def link_existing(self,
                       env_dir: Union[str, Path],
                       verbose: bool = False):
+
         print(f"Attempting to link existing virtual environment in location "
               f"{env_dir}.....")
         if (Path(self.venv_home) / env_dir).exists():
@@ -86,30 +101,32 @@ class StdlibBuilder(PythonEnvBuilder):
                   f"as a valid virtual environment, since no `python`/" \
                   f"`pip` executables or symlinks were discovered."
             raise BuilderError(msg)
-
         executable = self.get_executable(env_dir)
         python_version = version_string(self.get_python_version(executable))
         packages = self.list_packages(executable, verbose=verbose)
-        print(f"Successfully linked existing virtual environment in location "
-              f"{env_dir}.")
-        return PythonSpec(executable=executable,
+        spec = PythonSpec(root=str(env_dir),
+                          executable=executable,
                           version=python_version,
                           packages=packages)
+        print(f"Successfully linked existing virtual environment in location "
+              f"{env_dir}.")
+        return spec
 
     def install_packages(self,
                          executable: str,
                          packages: Optional[List[str]] = None,
                          requirements_file: Optional[str] = None,
                          options: Optional[List[str]] = None,
-                         verbose: bool = False):
+                         verbose: bool = False) -> None:
+        options = options or []
         command = [executable, "-m", "pip", "install"]
         if packages is not None:
             pass
         elif requirements_file is not None:
             req_path = Path(requirements_file)
-            if not req_path.exists():
-                raise BuilderError(f"File {requirements_file} does not "
-                                   f"exist.")
+            if not req_path.exists() or not req_path.is_file():
+                raise BuilderError(f"File {requirements_file!r} does not "
+                                   f"exist or was not recognized as a file.")
             with open(req_path, "r") as req_file:
                 packages = req_file.readlines()
         else:
@@ -117,15 +134,9 @@ class StdlibBuilder(PythonEnvBuilder):
                                "file need to be specified to the install "
                                "command.")
         command += list(packages)
-        option_list = []
-        if options is not None:
-            option_list += options
-        if self.pip_install_options != "":
-            option_list += self.pip_install_options.split(",")
-        if self.wheel_caches != "":
-            cache_locations = self.wheel_caches.split(":")
-            option_list += [f"--find-links={loc}" for loc in cache_locations]
-        command += list(set(option_list))
+        options += self.pip_install_options
+        options += [f"--find-links={loc}" for loc in self.wheel_caches]
+        command += list(set(options))
 
         location = Path(executable).parents[1]
         pkgs = ", ".join(packages)
@@ -136,20 +147,16 @@ class StdlibBuilder(PythonEnvBuilder):
         print("done.")
         print(f"Successfully installed packages {pkgs} into virtual "
               f"environment in location {location}.")
-        return self.list_packages(executable=executable)
 
     def uninstall_packages(self,
                            executable: str,
                            packages: List[str],
                            options: Optional[List[str]] = None,
-                           verbose: bool = False):
+                           verbose: bool = False) -> None:
+        options = options or []
+        options += self.pip_uninstall_options
         command = [executable, "-m", "pip", "uninstall", *packages]
-        option_list = []
-        if options is not None:
-            option_list += options
-        if self.pip_uninstall_options != "":
-            option_list += self.pip_uninstall_options.split(",")
-        command += list(set(option_list))
+        command += list(set(options))
 
         pkgs = ", ".join(packages)
         location = Path(executable).parents[1]
@@ -160,7 +167,6 @@ class StdlibBuilder(PythonEnvBuilder):
         print("done.")
         print(f"Successfully uninstalled packages {pkgs} from virtual "
               f"environment in location {location}.")
-        return self.list_packages(executable=executable)
 
     def list_packages(self, executable: str,
                       verbose: bool = False) -> List[str]:
