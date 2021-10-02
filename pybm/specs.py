@@ -2,7 +2,6 @@ import logging
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any, Tuple, Union
 
-from pybm import __version__ as current_pybm_version
 from pybm.util.git import map_commits_to_tags
 from pybm.mixins import StateMixin
 
@@ -12,10 +11,11 @@ ConfigValue = Union[str, int, float]
 @dataclass(frozen=True)
 class PythonSpec:
     """Dataclass representing a Python virtual environment specification."""
+    root: str = field()
     executable: str = field()
     version: str = field()
-    locations: List[str] = field(default_factory=list)
     packages: List[str] = field(default_factory=list)
+    locations: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -34,12 +34,15 @@ class Worktree:
         tag = commit_tag_mapping.get(commit, None)
         return Worktree(root=root, branch=branch_id, commit=commit, tag=tag)
 
-    def get_ref_and_type(self) -> Tuple[str, str]:
+    def get_ref_and_type(self, bare: bool = False) -> Tuple[str, str]:
         # at most two of commit, branch, tag are not None
+        # bare mode = only return the name, not the git refs/... prefix
         if self.branch is not None:
-            return self.branch, "branch"
+            branch = self.branch.split("/")[-1] if bare else self.branch
+            return branch, "branch"
         elif self.tag is not None:
-            return self.tag, "tag"
+            tag = self.tag.split("/")[-1] if bare else self.tag
+            return tag, "tag"
         else:
             return self.commit, "commit"
 
@@ -71,7 +74,6 @@ class BenchmarkEnvironment(StateMixin):
 
 @dataclass
 class CoreGroup:
-    version: str = current_pybm_version
     logFile: str = "logs/logs.txt"
     defaultLevel: int = logging.DEBUG
     loggingFormatter: str = "%(asctime)s — %(name)-12s " \
@@ -86,8 +88,7 @@ class GitGroup:
 
 @dataclass
 class RunnerGroup:
-    className: str = "pybm.runners.TimeitBenchmarkRunner"
-    requiredPackages: str = ""
+    className: str = "pybm.runners.TimeitRunner"
     resultDirectory: str = "results"
     failFast: bool = False
     numRepetitions: int = 1
@@ -108,5 +109,7 @@ class BuilderGroup:
 
 @dataclass
 class ReporterGroup:
-    className: str = "pybm.reporters.StdlibReporter"
-    requiredPackages: str = ""
+    className: str = "pybm.reporters.JSONReporter"
+    resultDirectory: str = "results"
+    targetTimeUnit: str = "usec"
+    significantDigits: int = 2

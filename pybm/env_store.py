@@ -25,7 +25,7 @@ class EnvironmentStore:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # TODO: Handle exceptions
+        # if exc_type is None:
         self.save()
 
     def load(self):
@@ -59,7 +59,7 @@ class EnvironmentStore:
     def create(self, name: Optional[str], worktree: Worktree,
                python: PythonSpec, created: str) -> BenchmarkEnvironment:
         name = name or f"env_{len(self.environments) + 1}"
-        print(f"Creating benchmark environment \"{name}\".....", end="")
+        print(f"Creating benchmark environment {name!r}.....", end="")
         env = BenchmarkEnvironment(name=name,
                                    worktree=worktree,
                                    python=python,
@@ -78,7 +78,7 @@ class EnvironmentStore:
         if self.verbose:
             display_attr = attr.replace(".", " ")
             print(f"Attempting to match benchmarking environment with "
-                  f"{display_attr} {value}.....", end="")
+                  f"{display_attr} {value!r}.....", end="")
         try:
             env = next(
                 e for e in self.environments if e.get_value(attr) == value)
@@ -89,7 +89,7 @@ class EnvironmentStore:
             if self.verbose:
                 print("failed")
             raise PybmError(f"No benchmark environment found with value"
-                            f" {value} for attribute `{attr}`.")
+                            f" {value} for attribute {attr!r}.")
 
     # def set(self, env: BenchmarkEnvironment, attr: str, value: Any):
     #     # assumes the environment is still in the list

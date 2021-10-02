@@ -8,7 +8,8 @@ import yaml
 
 from pybm.exceptions import PybmError
 from pybm.mixins import StateMixin
-from pybm.specs import CoreGroup, BuilderGroup, RunnerGroup, GitGroup
+from pybm.specs import CoreGroup, BuilderGroup, RunnerGroup, GitGroup, \
+    ReporterGroup
 from pybm.util.imports import import_from_module
 
 __all__ = ["PybmConfig",
@@ -26,8 +27,9 @@ Descriptions = Dict[str, str]
 class PybmConfig(StateMixin):
     core: CoreGroup = CoreGroup()
     git: GitGroup = GitGroup()
-    runner: RunnerGroup = RunnerGroup()
     builder: BuilderGroup = BuilderGroup()
+    runner: RunnerGroup = RunnerGroup()
+    reporter: ReporterGroup = ReporterGroup()
 
     @classmethod
     def load(cls, path: Union[str, pathlib.Path]):
@@ -43,13 +45,15 @@ class PybmConfig(StateMixin):
             core=CoreGroup(**spec["core"]),
             git=GitGroup(**spec["git"]),
             runner=RunnerGroup(**spec["runner"]),
-            builder=BuilderGroup(**spec["builder"]))
+            builder=BuilderGroup(**spec["builder"]),
+            reporter=ReporterGroup(**spec["reporter"]))
 
     def to_dict(self):
         return {"core": asdict(self.core),
                 "git": asdict(self.git),
                 "runner": asdict(self.runner),
-                "builder": asdict(self.builder)}
+                "builder": asdict(self.builder),
+                "reporter": asdict(self.reporter)}
 
     def save(self, path: Union[str, pathlib.Path]):
         with open(path, "w") as config_file:
@@ -115,7 +119,6 @@ description_db: Dict[str, Descriptions] = {
                             "documentation on logging formatters: "
                             "https://docs.python.org/3/library/"
                             "logging.html#formatter-objects.",
-        "version": "The currently installed version of pybm.",
     },
     "git": {
         "createWorktreeInParentDirectory": "Whether to create worktrees "

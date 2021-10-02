@@ -11,9 +11,10 @@ logger = get_logger(__name__)
 # TODO: Rethink this
 class SubprocessMixin:
     """Useful utilities for CLI command wrappers such as for git, venv."""
+    ex_type: type = PybmError
 
-    @staticmethod
-    def run_subprocess(command: List[str],
+    def run_subprocess(self,
+                       command: List[str],
                        reraise_on_error: bool = True,
                        print_status: bool = True,
                        **subprocess_kwargs) -> Tuple[int, str]:
@@ -35,7 +36,7 @@ class SubprocessMixin:
                 if not reraise_on_error:
                     print(msg)
             if reraise_on_error:
-                raise PybmError(msg)
+                raise self.ex_type(msg)
         return rc, p.stdout
 
 
@@ -74,18 +75,28 @@ class StateMixin:
     @staticmethod
     def canonicalize_type(obj, attr: str, value: str):
         annotations = obj.__annotations__
-        # if no annotation exist (this should not happen), interpret as string
+        # if no annotation exists (this should not happen), interpret as string
         target_type = annotations.get(attr, str)
-        if isinstance(value, target_type):
-            # TODO: Maybe scrutinize string inputs for if they make sense?
-            return value
-        else:
-            try:
+        try:
+            if target_type != bool:
+                # int, float, str
+                # TODO: Maybe scrutinize string inputs for if they make sense?
                 return target_type(value)
-            except ValueError:
-                print("failed.")
-                raise PybmError(f"Configuration value \"{attr}\" of class "
-                                f"{obj.__class__.__name__} has to be of type "
-                                f"\"{target_type.__name__}\", but the given "
-                                f"value {value} could not be "
-                                f"interpreted as such.")
+            else:
+                # bool(s) is True for all strings except the empty string,
+                # so allow setting booleans with the true/false literal
+                # like this
+                if value.lower() == "false":
+                    return False
+                elif value.lower() == "true":
+                    return True
+                else:
+                    # do not allow shorthands, y/n, 1/0 etc.
+                    raise ValueError
+        except ValueError:
+            print("failed.")
+            raise PybmError(f"Configuration value {attr!r} of class "
+                            f"{obj.__class__.__name__} has to be of type "
+                            f"{target_type.__name__!r}, but the given "
+                            f"value {value!r} could not be "
+                            f"interpreted as such.")

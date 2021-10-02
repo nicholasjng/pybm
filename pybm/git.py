@@ -8,8 +8,8 @@ from pybm.logging import get_logger
 from pybm.mixins import SubprocessMixin
 from pybm.specs import Worktree
 from pybm.util.common import lmap, lfilter, version_string
-from pybm.util.git import resolve_to_ref, disambiguate_info, get_git_version, \
-    is_git_repository
+from pybm.util.git import disambiguate_info, get_git_version, resolve_ref, \
+    is_main_worktree
 from pybm.util.path import current_folder
 
 # major, minor, micro
@@ -57,6 +57,7 @@ class GitWorktreeWrapper(SubprocessMixin):
 
     def __init__(self, config: PybmConfig):
         super().__init__()
+        self.ex_type = GitError
         self.command_db = _git_worktree_flags
         self.create_in_parent = config.get_value(
             "git.createWorktreeInParentDirectory")
@@ -85,7 +86,8 @@ class GitWorktreeWrapper(SubprocessMixin):
         command = self.prepare_subprocess_args(wt_command, *args, **kwargs)
         # check call args against git version
         self.feature_guard(command)
-        logger.debug("Running command \"{cmd}\"".format(cmd=" ".join(command)))
+        logger.debug(
+            "Running command \"{cmd}\".".format(cmd=" ".join(command)))
         return self.run_subprocess(command=command)
 
     def get_worktree_by_attr(self, attr: str, value: str) \
@@ -96,8 +98,8 @@ class GitWorktreeWrapper(SubprocessMixin):
             "branch": lambda x: x.split("/")[-1] == value,
             "tag": lambda x: x.split("/")[-1] == value,
         }
-        assert attr in attr_checks, f"illegal worktree attribute \"{attr}\""
-        # TODO: What to do if someone force-checks out the same ref twice?
+        assert attr in attr_checks, f"illegal worktree attribute {attr!r}"
+        # TODO: What to do here if someone force-checks out the same ref twice?
         try:
             match = attr_checks[attr]
             return next(
@@ -127,11 +129,11 @@ class GitWorktreeWrapper(SubprocessMixin):
             full_command = " ".join(command)
             minimum = version_string(min_version)
             actual = version_string(installed)
-            msg = f"Running the command {full_command}\" requires a " \
+            msg = f"Running the command {full_command!r} requires a " \
                   f"minimum git version of {minimum}, but your git " \
                   f"version was found to be only {actual}. " \
                   f"This version requirement is because the {of_type} " \
-                  f"\"{offender}\" was used, which was first introduced in " \
+                  f"{offender!r} was used, which was first introduced in " \
                   f"git version {minimum}."
             raise GitError(msg)
 
@@ -154,21 +156,21 @@ class GitWorktreeWrapper(SubprocessMixin):
                      verbose: bool = False):
         current_directory = current_folder()
 
-        if not is_git_repository(current_directory):
+        if not is_main_worktree(current_directory):
             raise GitError("No git repository present in this path.")
 
-        ref, ref_type = resolve_to_ref(commit_ish,
-                                       resolve_commits=resolve_commits)
+        ref, ref_type = resolve_ref(commit_ish,
+                                    resolve_commits=resolve_commits)
         if verbose:
-            print(f"Interpreting given git ref {commit_ish} "
+            print(f"Interpreting given git ref {commit_ish!r} "
                   f"as a {ref_type} name.")
 
         # check for existing worktree with the same ref
         if not force and self.get_worktree_by_attr(ref_type, ref):
-            msg = f"Worktree for {ref_type} {commit_ish} already exists. " \
+            msg = f"Worktree for {ref_type} {commit_ish!r} already exists. " \
                   f"If you want to check out the same {ref_type} " \
                   f"multiple times, supply the -f/--force option to " \
-                  f"\"pybm create\"."
+                  f"`pybm create`."
             raise GitError(msg)
 
         if not destination:
@@ -183,7 +185,7 @@ class GitWorktreeWrapper(SubprocessMixin):
                 dest_dir = current_directory
             destination = str(dest_dir / worktree_id)
 
-        print(f"Adding worktree for ref \"{ref}\" in directory {destination}"
+        print(f"Adding worktree for ref {ref!r} in directory {destination}"
               f".....", end="")
         self.run_command("add", destination, ref, force=force,
                          checkout=checkout, lock=lock)
@@ -195,20 +197,20 @@ class GitWorktreeWrapper(SubprocessMixin):
         return wt
 
     def remove_worktree(self, info: str, force=False, verbose: bool = False):
-        if not is_git_repository(current_folder()):
+        if not is_main_worktree(current_folder()):
             raise GitError("No git repository present in this path.")
 
         attr = disambiguate_info(info)
         if verbose:
             print(f"Given identifier {info} was determined to be "
-                  f"the \"{attr}\" attribute of the desired worktree.")
+                  f"the {attr!r} attribute of the desired worktree.")
 
         print(f"Attempting to match git worktree with "
-              f"{attr} \"{info}\".....", end="")
+              f"{attr} {info!r}.....", end="")
         wt = self.get_worktree_by_attr(attr, info)
         if wt is None:
             print("failed.")
-            msg = f"Worktree with associated {attr} \"{info}\" " \
+            msg = f"Worktree with associated {attr} {info!r} " \
                   f"does not exist."
             raise GitError(msg)
         print("success.")
