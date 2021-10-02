@@ -7,7 +7,7 @@ from pybm.builders.builder import PythonEnvBuilder
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_builder_class, get_runner_requirements
 from pybm.env_store import EnvironmentStore
-from pybm.exceptions import BuilderError, PybmError
+from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.logging import get_logger
 from pybm.status_codes import ERROR, SUCCESS
@@ -210,23 +210,26 @@ class EnvCommand(CLICommand):
                 # installing runner requirements and pybm
                 required = get_runner_requirements(config=self.config)
                 required.append("git+https://github.com/nicholasjng/pybm")
-                pkgs = self.builder.install_packages(
-                    python_spec.executable,
-                    package_list=required,
-                    verbose=verbose
-                )
-                python_spec.packages.extend(pkgs)
+                self.builder.install_packages(
+                    executable=python_spec.executable,
+                    packages=required,
+                    verbose=verbose)
 
-                _ = env_store.create(name=options.name,
-                                     worktree=wt,
-                                     python=python_spec,
-                                     created=str(datetime.now()))
-                return SUCCESS
-            except BuilderError:
+                python_spec.packages.extend(required)
+            except PybmError:
+                if python_spec is not None:
+                    self.builder.delete(python_spec.root)
                 # venv building fails after git worktree creation -> remove
                 if wt is not None:
                     self.git.remove_worktree(wt.root)
                 return ERROR
+            finally:
+                if wt is not None and python_spec is not None:
+                    _ = env_store.create(name=options.name,
+                                         worktree=wt,
+                                         python=python_spec,
+                                         created=str(datetime.now()))
+                # else: raise an error here
 
     def delete(self, options: argparse.Namespace, verbose: bool):
         with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
@@ -251,12 +254,14 @@ class EnvCommand(CLICommand):
     def install(self, options: argparse.Namespace, verbose: bool):
         with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
             target_env = env_store.get("name", options.identifier)
-            new_pkgs = self.builder.install_packages(
+            executable = target_env.get_value("python.executable")
+            self.builder.install_packages(
                 executable=target_env.get_value("python.executable"),
-                package_list=options.packages,
+                packages=options.packages,
                 requirements_file=options.requirements_file,
                 options=options.pip_options,
                 verbose=verbose)
+            new_pkgs = self.builder.list_packages(executable)
             target_env.set_value("python.packages", new_pkgs)
 
         return SUCCESS
@@ -264,11 +269,13 @@ class EnvCommand(CLICommand):
     def uninstall(self, options: argparse.Namespace, verbose: bool):
         with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
             target_env = env_store.get("name", options.identifier)
-            new_pkgs = self.builder.uninstall_packages(
-                executable=target_env.get_value("python.executable"),
-                package_list=options.packages,
+            executable = target_env.get_value("python.executable")
+            self.builder.uninstall_packages(
+                executable=executable,
+                packages=options.packages,
                 options=options.pip_options,
                 verbose=verbose)
+            new_pkgs = self.builder.list_packages(executable)
             target_env.set_value("python.packages", new_pkgs)
 
         return SUCCESS

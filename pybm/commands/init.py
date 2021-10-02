@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -9,8 +10,7 @@ from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.status_codes import SUCCESS
-from pybm.util.git import is_git_repository
-from pybm.util.path import get_subdirs
+from pybm.util.git import is_main_worktree
 
 
 class InitCommand(CLICommand):
@@ -45,17 +45,20 @@ class InitCommand(CLICommand):
             builder_class: PythonEnvBuilder = get_builder_class(config)
             git: GitWorktreeWrapper = GitWorktreeWrapper(config)
             for i, worktree in enumerate(git.list_worktrees()):
-                if "venv" in get_subdirs(worktree.root):
-                    venv_root = Path(worktree.root) / "venv"
+                venv_root = Path(worktree.root) / "venv"
+                if venv_root.exists() and venv_root.is_dir():
                     python_spec = builder_class.link_existing(venv_root,
                                                               verbose=verbose)
                 else:
+                    python_spec = builder_class.create(sys.executable,
+                                                       venv_root)
                     # TODO: Enable auto-grabbing from venv home
-                    raise PybmError(f"Virtual environment not found "
-                                    f"for environment with root "
-                                    f"{worktree.root!r}.")
+                    # raise PybmError(f"Virtual environment not found "
+                    #                 f"for environment with root "
+                    #                 f"{worktree.root!r}.")
                 created = datetime.now()
                 fmt = config.get_value("core.datetimeFormatter")
+                # TODO: Assert that the main worktree is "root"
                 env_store.create(name="root" if i == 0 else f"env_{i + 1}",
                                  worktree=worktree,
                                  python=python_spec,
@@ -70,7 +73,7 @@ class InitCommand(CLICommand):
         if verbose:
             print(f"Parsed command line options: {options}")
 
-        if not is_git_repository(Path.cwd()):
+        if not is_main_worktree(Path.cwd()):
             raise PybmError("Cannot initialize Pybm here because the "
                             "current directory was not recognized "
                             "as a git repository.")
