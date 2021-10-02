@@ -12,12 +12,13 @@ def is_context_provider(func: Callable) -> bool:
     return takes_no_args and has_correct_annotation
 
 
-def is_valid_timeit_target(func_obj: Any) -> bool:
+def is_valid_timeit_target(func_obj: Tuple[str, Any]) -> bool:
     """Check whether a function is a valid target for timeit benchmarking
     with the standard library benchmark runner."""
-    is_func = inspect.isfunction(func_obj)
+    name, func = func_obj
+    is_func = inspect.isfunction(func)
     if not is_func:
         return False
-    func_sig = inspect.signature(func_obj)
+    func_sig = inspect.signature(func)
     takes_no_args = not bool(func_sig.parameters)
     return takes_no_args

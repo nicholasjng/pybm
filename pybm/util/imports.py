@@ -60,6 +60,8 @@ def import_from_module(identifier: str) -> Callable:
         raise PybmError(f"Module {module_name} does not exist in the current "
                         f"Python environment.")
     module = importlib.import_module(module_name)
+    if not hasattr(module, name):
+        raise PybmError(f"Module {module_name} has no member {name}.")
     return getattr(module, name)
 
 

@@ -25,12 +25,18 @@ def run_subprocess(command: List[str],
     return rc, p.stdout
 
 
-def is_git_repository(path: Union[str, Path]) -> bool:
+def is_git_worktree(path: Union[str, Path]) -> bool:
     # https://stackoverflow.com/questions/2180270/check-if-current-directory-is-a-git-repository
     cmd = ["git", "rev-parse", "--is-inside-work-tree"]
-    # command raises if not inside a worktree
+    # command exits with 1 if not inside a worktree
     rc, msg = run_subprocess(cmd, False, cwd=path)
     return rc == 0
+
+
+def is_main_worktree(path: Union[str, Path]) -> bool:
+    git_path = Path(path) / ".git"
+    has_git_folder = git_path.exists() and git_path.is_dir()
+    return is_git_worktree(path) and has_git_folder
 
 
 def is_valid_sha1_part(input_str: str) -> bool:
@@ -42,10 +48,9 @@ def is_valid_sha1_part(input_str: str) -> bool:
     return True
 
 
-def resolve_to_ref(commit_ish: str, resolve_commits: bool):
+def resolve_ref(commit_ish: str, resolve_commits: bool):
     ref = commit_ish
     if commit_ish in list_tags():
-        # ref is a tag name
         ref_type = "tag"
     # TODO: Make a worktree from a remote branch (does not appear here)
     elif commit_ish in list_local_branches():
@@ -113,7 +118,7 @@ def resolve_commit(ref: str) -> str:
 
 
 def disambiguate_info(info: str) -> str:
-    if Path(info).exists() and is_git_repository(info):
+    if Path(info).exists() and is_git_worktree(info):
         attr = "root"
     elif is_valid_sha1_part(info):
         attr = "commit"

@@ -5,6 +5,18 @@ from pybm.specs import BenchmarkEnvironment
 from pybm.util.common import lmap
 
 
+def abbrev_home(path: str) -> str:
+    home_dir = os.getenv("HOME")
+    if home_dir is not None and path.startswith(home_dir):
+        path = path.replace(home_dir, "~")
+    return path
+
+
+def calculate_column_widths(data: Iterable[Iterable[str]]) -> List[int]:
+    data_lengths = zip(*(lmap(len, d) for d in data))
+    return lmap(max, data_lengths)
+
+
 def make_line(values: Iterable[str], column_widths: Iterable[int],
               padding: int) -> str:
     pad_char = " " * padding
@@ -22,26 +34,22 @@ def make_separator(column_widths: Iterable[int], padding) -> str:
 
 
 def format_environments(environments: List[BenchmarkEnvironment],
-                        padding: int = 1):
-    env_data = []
+                        padding: int = 1) -> None:
+
     column_names = ["Name", "Git ref", "Ref type", "Worktree directory",
                     "Python version"]
+    env_data = [column_names]
     for env in environments:
         values = [env.get_value("name")]
         values.extend(env.worktree.get_ref_and_type())
         root: str = env.get_value("worktree.root")
-        home_dir = os.getenv("HOME")
-        if home_dir is not None and root.startswith(home_dir):
-            root = root.replace(home_dir, "~")
-        values.append(root)
+        values.append(abbrev_home(root))
         values.append(env.get_value("python.version"))
-        env_data.append(dict(zip(column_names, values)))
+        env_data.append(values)
 
-    column_widths = lmap(
-        lambda name: max(max(len(name), len(val[name])) for val in env_data),
-        column_names)
+    column_widths = calculate_column_widths(env_data)
 
-    print(make_line(column_names, column_widths, padding=padding))
-    print(make_separator(column_widths, padding=padding))
-    for d in env_data:
-        print(make_line(d.values(), column_widths, padding=padding))
+    for i, d in enumerate(env_data):
+        print(make_line(d, column_widths, padding=padding))
+        if i == 0:
+            print(make_separator(column_widths, padding=padding))
