@@ -1,28 +1,19 @@
-import functools
+import argparse
 import json
-import re
+import sys
+import time
 import timeit
-from pathlib import Path
-from typing import List, Optional, Any, Tuple, Dict
+from typing import List, Any, Dict, Optional
 
+import pybm.runners.util as runner_util
 from pybm.config import PybmConfig
 from pybm.runners.runner import BenchmarkRunner
-from pybm.specs import BenchmarkEnvironment
+from pybm.status_codes import SUCCESS
 from pybm.util.common import dfilter
 from pybm.util.functions import is_valid_timeit_target
 
 
-def is_module_member(obj_tuple: Tuple[str, Any], module_name: str):
-    """Check membership of object in __main__ module to avoid benchmarking
-    imports due to accidentally pattern matching them."""
-    obj = obj_tuple[1]
-    if not hasattr(obj, "__module__"):
-        return False
-    else:
-        return obj.__module__ == module_name
-
-
-class TimeitBenchmarkRunner(BenchmarkRunner):
+class TimeitRunner(BenchmarkRunner):
     """
     A benchmark runner class interface designed to dispatch benchmarking
     runs in pybm using Google Benchmark.
@@ -31,70 +22,78 @@ class TimeitBenchmarkRunner(BenchmarkRunner):
     def __init__(self, config: PybmConfig):
         super().__init__(config=config)
 
-    def dispatch(
-            self,
-            benchmarks: List[str],
-            environment: BenchmarkEnvironment,
-            repetitions: int = 1,
-            benchmark_filter: Optional[str] = None,
-            benchmark_context: Optional[List[str]] = None):
-        result_dir = self.create_result_dir(environment=environment)
-        # stupid name, only used for printing below
-        n = len(benchmarks)
-        print(f"Found a total of {n} benchmark targets for "
-              f"environment {environment.name!r}.")
-        for i, benchmark in enumerate(benchmarks):
-            print(f"Running benchmark {benchmark}.....[{i + 1}/{n}]")
-            python = environment.get_value("python.executable")
-            worktree_root = environment.get_value("worktree.root")
-            result_name = Path(benchmark).stem + "_results.json"
-            result_file = result_dir / result_name
-            command = [python, benchmark]
-            command += self.create_flags(
-                result_file=result_file,
-                num_repetitions=repetitions,
-                benchmark_filter=benchmark_filter,
-                benchmark_context=benchmark_context,
-            )
-            self.run_subprocess(command, cwd=worktree_root)
+    def parse_flags(self, flags: List[str]):
+        prefix = self.prefix
+        parser = argparse.ArgumentParser(prog=self.__class__.__name__,
+                                         add_help=False)
+        parser.add_argument(f"{prefix}_filter",
+                            type=str,
+                            default=None)
+        parser.add_argument(f"{prefix}_repetitions",
+                            type=int)
+        parser.add_argument(f"{prefix}_context",
+                            action="append",
+                            default=None)
+        return parser.parse_args(flags)
 
-    def run_benchmark(self, args: List[str] = None):
-        flag_parser = self.create_parser()
-        options = flag_parser.parse_args(args)
+    @staticmethod
+    def make_context(benchmark_context: Optional[List[str]] = None):
+        # construct and fill context dictionary object
+        context_dict: Dict[str, str] = {}
+        if benchmark_context is not None:
+            # validate context first before JSON construction
+            runner_util.validate_context(benchmark_context, parsed=True)
+            for ctx in benchmark_context:
+                name, value = ctx.split("=")
+                context_dict[name] = value
+        return context_dict
+
+    def run_benchmark(self,
+                      argv: List[str] = None,
+                      context: Dict[str, Any] = None) -> int:
+        assert context is not None, "need to specify a module context"
+        argv = argv or sys.argv
+        executable, *flags = argv
+        flags += self.get_current_context()
+        flags += [f"{self.prefix}_context=executable={executable}"]
+        args = self.parse_flags(flags=flags)
         json_obj: Dict[str, Any] = {}
-        out_path = options.benchmark_out
 
-        # filter admissible targets as those from the __main__ module
-        # of the subprocess (target .py file)
-        is_main_member = functools.partial(is_module_member,
-                                           module_name="__main__")
-        module_targets = dfilter(is_main_member, globals())
+        module_targets = runner_util.filter_targets(
+            module_context=context, regex_filter=args.benchmark_filter)
         # valid timeit target <=> is function + takes no args
         module_targets = dfilter(is_valid_timeit_target, module_targets)
-        benchmark_filter = options.benchmark_filter
-        if benchmark_filter is not None:
-            pattern = re.compile(options.benchmark_filter)
-            module_targets = dfilter(
-                lambda x: pattern.match(x[0]) is not None, module_targets)
 
-        # construct and fill context dictionary object
-        benchmark_context: List[str] = options.benchmark_context
-        context_dict: Dict[str, str] = {}
-        for ctx in benchmark_context:
-            name, value = ctx.split("=")
-            context_dict[name] = value
-        # add to JSON object
-        json_obj["context"] = context_dict
+        benchmark_context: Optional[List[str]] = args.benchmark_context
+        # construct and fill context dictionary, add to JSON payload
+        json_obj["context"] = self.make_context(benchmark_context)
 
-        num_reps = options.benchmark_repetitions
-        benchmarks = []
-        for name, func in module_targets.items():
+        benchmark_objects = []
+        for name in module_targets.keys():
             benchmark_obj: Dict[str, Any] = {"name": name}
             # Source: https://docs.python.org/3/library/timeit.html#examples
-            t = timeit.Timer(stmt=f"{name}()", globals=globals())
-            benchmark_obj["times"] = t.repeat(repeat=num_reps)
-            benchmarks.append(benchmark_obj)
+            t_real = timeit.Timer(stmt=f"{name}()",
+                                  setup=f"from __main__ import {name}",
+                                  timer=time.perf_counter)
+            # Explanation real vs. CPU time:
+            # https://stackoverflow.com/questions/25785243/understanding-time-perf-counter-and-time-process-time
+            t_cpu = timeit.Timer(stmt=f"{name}()",
+                                 setup=f"from __main__ import {name}",
+                                 timer=time.process_time)
+            for t, measured in [(t_real, "real_time"), (t_cpu, "cpu_time")]:
+                number, _ = t.autorange(None)
+                # TODO: What if these are different?
+                benchmark_obj["iterations"] = number
+                # TODO: Give option to specify time unit
+                benchmark_obj["time_unit"] = "s"
+                # TODO: Give option to log raw list instead of min
+                benchmark_obj[measured] = min(t.repeat(
+                    repeat=args.benchmark_repetitions, number=number)) / number
 
-        json_obj["benchmarks"] = benchmarks
-        with open(out_path, "w") as result_file:
-            json.dump(json_obj, fp=result_file)
+            benchmark_objects.append(benchmark_obj)
+
+        json_obj["benchmarks"] = benchmark_objects
+        # write the JSON object to stdout, to be caught by the subprocess
+        # started in the run command.
+        sys.stdout.write(json.dumps(json_obj))
+        return SUCCESS
