@@ -27,5 +27,5 @@ setup(
     },
     author="Nicholas Junge",
     license="Apache-2.0",
-    url="https://github.com/njunge94/pybm"
+    url="https://github.com/nicholasjng/pybm"
 )
