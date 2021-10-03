@@ -59,7 +59,7 @@ class StateMixin:
             else:
                 return default
 
-    def set_value(self, attr: str, value: Any):
+    def set_value(self, attr: str, value: Any, typecheck: bool = True):
         *subkeys, key = attr.split(".")
         obj = self
         for subkey in subkeys:
@@ -68,8 +68,9 @@ class StateMixin:
             # print("failed.")
             raise PybmError(f"Class {self.__class__.__name__!r} has no "
                             f"attribute {attr!r}.")
-        canonicalized_value = self.canonicalize_type(obj, key, value)
-        setattr(obj, key, canonicalized_value)
+        if typecheck:
+            value = self.canonicalize_type(obj, key, value)
+        setattr(obj, key, value)
         return self
 
     @staticmethod

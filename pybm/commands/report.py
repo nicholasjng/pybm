@@ -30,23 +30,10 @@ class ReportCommand(CLICommand):
                                       "of the n-th preceding run "
                                       "(i.e., n runs ago), "
                                       "use the \"latest^{n}\" syntax.")
-        self.parser.add_argument("anchor_ref",
-                                 metavar="<anchor-ref>",
-                                 help="Mandatory. Reference to display "
-                                      "results for or compare results "
-                                      "against. In compare mode, "
-                                      "this ref is the baseline for all "
-                                      "comparisons, so any relative "
-                                      "changes shown are always with respect "
-                                      "to this ref.")
-        self.parser.add_argument("compare_refs",
-                                 nargs="*",
-                                 default=None,
-                                 metavar="<compare-refs>",
-                                 help="Optional additional benchmarked refs "
-                                      "to compare against the anchor. "
-                                      "An error is raised if any of the given "
-                                      "refs are not present in the run.")
+        self.parser.add_argument("ref",
+                                 metavar="<ref>",
+                                 help="Reference to display benchmark results "
+                                      "for. Mandatory.")
         self.parser.add_argument("--target-filter",
                                  type=str,
                                  default=None,
@@ -84,26 +71,22 @@ class ReportCommand(CLICommand):
         options = self.parser.parse_args(args)
 
         # TODO: Parse run to fit schema
-        run = options.run
-        anchor_ref = options.anchor_ref
-        compare_refs = options.compare_refs
+        # run = options.run
+        ref = options.ref
 
-        if not compare_refs:
-            result_dir = self.reporter.result_dir
-            # TODO: Make this dynamic to support other run identifiers
-            result = sorted(get_subdirs(result_dir))[-1]
-            result_path = result_dir / result / anchor_ref
-            if result_path.exists():
-                self.reporter.report(ref=anchor_ref,
-                                     result=result,
-                                     target_filter=options.target_filter,
-                                     benchmark_filter=options.benchmark_filter,
-                                     context_filter=options.context_filter)
-            else:
-                raise PybmError(f"No benchmark results found for ref "
-                                f"{anchor_ref!r} in the requested run.")
+        result_dir = self.reporter.result_dir
+        # TODO: Make this dynamic to support other run identifiers
+        result = sorted(get_subdirs(result_dir))[-1]
+        result_path = result_dir / result / ref
+        if result_path.exists():
+            self.reporter.report(ref=ref,
+                                 result=result,
+                                 target_filter=options.target_filter,
+                                 benchmark_filter=options.benchmark_filter,
+                                 context_filter=options.context_filter)
         else:
-            raise PybmError("Comparison for multiple refs is not implemented "
-                            "at this time.")
+            raise PybmError(f"No benchmark results found for ref "
+                            f"{ref!r} in the requested run.")
+
 
         return SUCCESS

@@ -74,7 +74,8 @@ class BenchmarkRunner(SubprocessMixin):
         benchmark_path = Path(path)
         if benchmark_path.is_dir():
             benchmark_targets = list_contents(benchmark_path,
-                                              file_suffix=".py")
+                                              file_suffix=".py",
+                                              names_only=False)
         elif benchmark_path.is_file():
             benchmark_targets = [str(path)]
         else:
@@ -104,7 +105,7 @@ class BenchmarkRunner(SubprocessMixin):
         benchmark in the given environment."""
 
         python = environment.get_value("python.executable")
-        worktree_root = environment.get_value("worktree.root")
+        # worktree_root = environment.get_value("worktree.root")
         ref, _ = environment.worktree.get_ref_and_type(bare=True)
         # supply the ref by default.
         command = [python, benchmark, f"--benchmark_context=ref={ref}"]
@@ -113,8 +114,7 @@ class BenchmarkRunner(SubprocessMixin):
             benchmark_filter=benchmark_filter,
             benchmark_context=benchmark_context,
         )
-        return self.run_subprocess(command, reraise_on_error=False,
-                                   cwd=worktree_root)
+        return self.run_subprocess(command, reraise_on_error=False,)
 
     def run_benchmark(self,
                       argv: List[str] = None,

@@ -59,7 +59,6 @@ def is_module_member(obj_tuple: Tuple[str, Any], module_name: str):
         return obj.__module__ == module_name
 
 
-
 def load_context_providers(provider_info: str) -> List[Any]:
     if provider_info != "":
         provider_names = provider_info.split(",")

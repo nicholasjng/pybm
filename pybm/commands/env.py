@@ -7,10 +7,11 @@ from pybm.builders.builder import PythonEnvBuilder
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_builder_class, get_runner_requirements
 from pybm.env_store import EnvironmentStore
-from pybm.exceptions import PybmError
+from pybm.exceptions import PybmError, BuilderError
 from pybm.git import GitWorktreeWrapper
 from pybm.logging import get_logger
 from pybm.status_codes import ERROR, SUCCESS
+from pybm.util.git import disambiguate_info
 from pybm.util.print import format_environments
 
 logger = get_logger(__name__)
@@ -216,7 +217,7 @@ class EnvCommand(CLICommand):
                     verbose=verbose)
 
                 python_spec.packages.extend(required)
-            except PybmError:
+            except BuilderError:
                 if python_spec is not None:
                     self.builder.delete(python_spec.root)
                 # venv building fails after git worktree creation -> remove
@@ -233,19 +234,26 @@ class EnvCommand(CLICommand):
 
     def delete(self, options: argparse.Namespace, verbose: bool):
         with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
-            name = options.identifier
+            info = options.identifier
+            # check for known git info
+            attr = disambiguate_info(info)
+            if attr is None:
+                attr = "name"
             print(f"Attempting to remove benchmark environment "
-                  f"with name {name!r}.")
+                  f"with {attr} {info!r}.")
+            if attr != "name":
+                attr = "workspace." + attr
             # TODO: Allow deletion by attrs other than name
-            env_to_remove = env_store.delete("name", name)
+            env_to_remove = env_store.get(attr, info)
             env_name = env_to_remove.name
             print(f"Found matching benchmarking environment {env_name!r}, "
                   "starting removal.")
             # Remove venv first LIFO style to avoid git problems
-            self.builder.delete(env_to_remove.get_value("venv.root"))
+            self.builder.delete(env_to_remove.get_value("python.root"))
             _ = self.git.remove_worktree(
                 env_to_remove.get_value("worktree.root"),
                 force=options.force)
+            _ = env_store.delete(attr, info)
             print(f"Successfully removed benchmarking environment "
                   f"{env_name!r}.")
 
@@ -262,7 +270,7 @@ class EnvCommand(CLICommand):
                 options=options.pip_options,
                 verbose=verbose)
             new_pkgs = self.builder.list_packages(executable)
-            target_env.set_value("python.packages", new_pkgs)
+            target_env.set_value("python.packages", new_pkgs, typecheck=False)
 
         return SUCCESS
 
@@ -276,7 +284,7 @@ class EnvCommand(CLICommand):
                 options=options.pip_options,
                 verbose=verbose)
             new_pkgs = self.builder.list_packages(executable)
-            target_env.set_value("python.packages", new_pkgs)
+            target_env.set_value("python.packages", new_pkgs, typecheck=False)
 
         return SUCCESS
 

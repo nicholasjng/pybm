@@ -201,6 +201,11 @@ class GitWorktreeWrapper(SubprocessMixin):
             raise GitError("No git repository present in this path.")
 
         attr = disambiguate_info(info)
+        if not attr:
+            # TODO: Display close matches if present
+            msg = f"Argument {info!r} was not recognized as an attribute of " \
+                  f"an existing environment worktree."
+            raise GitError(msg)
         if verbose:
             print(f"Given identifier {info} was determined to be "
                   f"the {attr!r} attribute of the desired worktree.")

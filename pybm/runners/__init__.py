@@ -1,3 +1,6 @@
 # flake8: noqa: F401
-from .gbm import GoogleBenchmarkRunner
+try:
+    from .gbm import GoogleBenchmarkRunner
+except ModuleNotFoundError:
+    pass
 from .stdlib import TimeitRunner

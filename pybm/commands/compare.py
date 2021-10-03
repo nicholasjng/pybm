@@ -32,11 +32,12 @@ class CompareCommand(CLICommand):
                                       "use the \"latest^{n}\" syntax.")
         self.parser.add_argument("refs",
                                  nargs="+",
-                                 default=None,
                                  metavar="<refs>",
-                                 help="Optional additional benchmarked refs "
-                                      "to compare against the anchor. "
-                                      "An error is raised if any of the given "
+                                 help="Benchmarked refs to compare. The first "
+                                      "given ref will be treated as the "
+                                      "anchor ref, relative to which all "
+                                      "differences are reported. An error is "
+                                      "raised if any of the given "
                                       "refs are not present in the run.")
         self.parser.add_argument("--target-filter",
                                  type=str,
@@ -76,7 +77,7 @@ class CompareCommand(CLICommand):
 
         # TODO: Parse run to fit schema
         run = options.run
-        refs: List[str] = options.compare_refs
+        refs: List[str] = options.refs
 
         result_dir = self.reporter.result_dir
         # TODO: Make this dynamic to support other run identifiers

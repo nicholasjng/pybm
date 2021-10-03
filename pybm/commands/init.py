@@ -53,9 +53,6 @@ class InitCommand(CLICommand):
                     python_spec = builder_class.create(sys.executable,
                                                        venv_root)
                     # TODO: Enable auto-grabbing from venv home
-                    # raise PybmError(f"Virtual environment not found "
-                    #                 f"for environment with root "
-                    #                 f"{worktree.root!r}.")
                 created = datetime.now()
                 fmt = config.get_value("core.datetimeFormatter")
                 # TODO: Assert that the main worktree is "root"

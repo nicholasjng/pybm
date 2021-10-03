@@ -1,7 +1,7 @@
 import re
 import subprocess
 from pathlib import Path
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict, Union, Optional
 
 from pybm.exceptions import GitError
 from pybm.util.common import lmap, lfilter, version_tuple
@@ -117,7 +117,7 @@ def resolve_commit(ref: str) -> str:
     return commit
 
 
-def disambiguate_info(info: str) -> str:
+def disambiguate_info(info: str) -> Optional[str]:
     if Path(info).exists() and is_git_worktree(info):
         attr = "root"
     elif is_valid_sha1_part(info):
@@ -127,8 +127,5 @@ def disambiguate_info(info: str) -> str:
     elif info in list_tags():
         attr = "tag"
     else:
-        # TODO: Display close matches if present
-        msg = f"Argument {info!r} was not recognized as an attribute of an " \
-              f"existing environment worktree."
-        raise GitError(msg)
+        attr = None
     return attr

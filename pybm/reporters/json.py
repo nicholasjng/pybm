@@ -2,7 +2,7 @@ import json
 import re
 from functools import partial
 from pathlib import Path
-from typing import Union, Optional, Any, Dict, List
+from typing import Union, Optional, Any, Dict, List, Callable
 
 from pybm import PybmConfig
 from pybm.exceptions import PybmError
@@ -17,10 +17,9 @@ unit_table = {"s": 1., "sec": 1., "ms": 1e-3, "msec": 1e-3,
               "us": 1e-6, "usec": 1e-6, "ns": 1e-9, "nsec": 1e-9}
 
 
-def get_column_widths(data: List[Dict[str, str]]):
-    header_widths = lmap(len, data[0].keys())
-    data_lengths = zip(header_widths, *(lmap(len, d.values()) for d in data))
-    return lmap(max, data_lengths)
+def get_unique_names(results: List[Dict[str, Any]]):
+    names = lmap(lambda x: x["name"], results)
+    return list(set(names))
 
 
 def rescale(time_value: float, current_unit: str, target_unit: str):
@@ -115,21 +114,21 @@ def compare_results(results: List[Dict[str, Any]],
         dtime = 1. / speedup - 1.
         res[dtime_key] = dtime
         res["speedup"] = speedup
+        # TODO: Pop user counters to push them to the back too
+        res["iterations"] = res.pop("iterations")
 
     anchor_result[dtime_key] = 0.0
     anchor_result["speedup"] = 1.0
-    # TODO: Pop iteration number here to wrap it around and
-    #  have it appear last in the printed table
-
+    anchor_result["iterations"] = anchor_result.pop("iterations")
     # TODO: Warn here about a missing result
-    # case when a result is missing for a ref
-    # pad values according to the dict schema of the anchor ref
     missing = len(refs) - len(results)
     fillers = []
     if missing > 0:
+        # a result is missing for a ref
         missing_refs = refs[missing:]
         filler = "N/A"
         for ref in missing_refs:
+            # pad values according to the dict schema of the anchor ref
             dummy_dict = {k: v if isinstance(v, str) else filler for k, v in
                           anchor_result.items()}
             dummy_dict["ref"] = ref
@@ -141,10 +140,11 @@ class JSONReporter(BenchmarkReporter):
     def __init__(self, config: PybmConfig):
         super(JSONReporter, self).__init__(config=config)
         self.padding = 1
-        self.formatters = {
-            int: str,
-            str: lambda x: x,
-            float: lambda x: f"{x:.{self.significant_digits}f}"}
+        self.formatters: Dict[str, Callable] = {
+            "time": lambda x: f"{x:.{self.significant_digits}f}",
+            "rel_time": lambda x: f"{x:+.2%}",
+            "speedup": lambda x: f"{x:.2f}x",
+        }
 
     def compare(self,
                 *refs: str,
@@ -166,10 +166,15 @@ class JSONReporter(BenchmarkReporter):
 
         filtered_results = lmap(filter_fn, benchmarks_raw)
         processed_results = flatten(lmap(process_fn, filtered_results))
-        grouped_results = partition_n(len(refs),
-                                      lambda x: refs.index(x["ref"]),
+        unique_names = get_unique_names(processed_results)
+
+        # group all results by benchmark name
+        grouped_results = partition_n(len(unique_names),
+                                      lambda x: unique_names.index(x["name"]),
                                       processed_results)
+        # compare groups of benchmarks
         compared_results = flatten(lmap(compare_fn, grouped_results))
+
         formatted_results = lmap(self.transform_result, compared_results)
         self.log_to_console(formatted_results)
 
@@ -190,9 +195,7 @@ class JSONReporter(BenchmarkReporter):
 
         filtered_results = lmap(filter_fn, benchmark_results)
         processed_results = flatten(lmap(process_fn, filtered_results))
-        print(processed_results)
         formatted_results = lmap(format_fn, processed_results)
-        print(formatted_results)
         self.log_to_console(formatted_results)
 
     def load(self, ref: str, result: Union[str, Path],
@@ -214,7 +217,10 @@ class JSONReporter(BenchmarkReporter):
         return results
 
     def log_to_console(self, results: List[Dict[str, str]]):
-        column_widths = get_column_widths(results)
+        header_widths = lmap(len, results[0].keys())
+        data_widths = zip(header_widths,
+                          *(lmap(len, d.values()) for d in results))
+        column_widths: List[int] = lmap(max, data_widths)
         padding = self.padding
         for i, res in enumerate(results):
             if i == 0:
@@ -231,16 +237,15 @@ class JSONReporter(BenchmarkReporter):
                 key = key.split("_")[0]
                 key = key.upper() if key in ["cpu", "gpu"] else "Wall"
                 key += f" Time ({self.target_time_unit})"
+                value = self.formatters["time"](value)
             elif key == "name":
                 key = "Benchmark Name"
             elif key.startswith("dtime"):
-                # TODO: Format value as percentage
                 # relative time difference key
                 key = key.replace("dtime", "Δt")
+                value = self.formatters["rel_time"](value)
             else:
+                value = self.formatters.get(key, str)(value)
                 key = key.capitalize()
-            value_type = type(value)
-            value = self.formatters[value_type](value)
-
             transformed[key] = value
         return transformed
