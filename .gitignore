@@ -128,7 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-benchmarks/
 gbm_test/
 results/
 .pybm/
