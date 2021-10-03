@@ -55,7 +55,11 @@ class StdlibBuilder(PythonEnvBuilder):
         else:
             env_dir = (Path(self.venv_home) / destination).resolve()
 
-        command = [str(executable), "-m", "venv", str(env_dir)]
+        # THIS LINE IS EXTREMELY IMPORTANT. It resolves symlinks if the
+        # given python interpreter was a symlink to begin with.
+        resolved_executable = Path(executable).resolve()
+
+        command = [str(resolved_executable), "-m", "venv", str(env_dir)]
         options += self.venv_options
         # Prevent duplicate options
         command += list(set(options))
@@ -64,10 +68,9 @@ class StdlibBuilder(PythonEnvBuilder):
         self.run_subprocess(command)
         print("done.")
 
-        root = str(Path(executable).parents[1])
         executable = self.get_executable(env_dir)
         python_version = version_string(self.get_python_version(executable))
-        return PythonSpec(root=root,
+        return PythonSpec(root=env_dir,
                           executable=executable,
                           version=python_version,
                           packages=self.list_packages(executable))
@@ -89,7 +92,6 @@ class StdlibBuilder(PythonEnvBuilder):
     def link_existing(self,
                       env_dir: Union[str, Path],
                       verbose: bool = False):
-
         print(f"Attempting to link existing virtual environment in location "
               f"{env_dir}.....")
         if (Path(self.venv_home) / env_dir).exists():

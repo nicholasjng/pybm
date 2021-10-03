@@ -81,22 +81,19 @@ class PythonEnvBuilder(SubprocessMixin):
         subdir_set = set(get_subdirs(path=path))
         if os.name != "nt":
             exec_set, bin_folder = {"pip", "python"}, "bin"
-            folder_set = {bin_folder, "include", "lib"}
         else:
             # TODO: Confirm the executable names on Windows
             exec_set, bin_folder = {"pip.exe", "python.exe"}, "Scripts"
-            folder_set = {bin_folder, "Include", "Lib"}
         if verbose:
             print(f"Matching subdirectories of {path} against default "
                   f"subdirectories of a virtual environment root.....",
                   end="")
-        if subdir_set != folder_set:
+        if bin_folder not in subdir_set:
             if verbose:
                 print("failed.")
-                expected = ", ".join(exec_set)
-                actual = ", ".join(subdir_set)
-                print(f"Expected to find exactly the subdirectories"
-                      f" {expected}, but found {actual}.")
+                print(f"Expected to find a {bin_folder!r} directory "
+                      f"containing the executables, but the directory does "
+                      f"not exist.")
             return False
         if verbose:
             print("successful.")
