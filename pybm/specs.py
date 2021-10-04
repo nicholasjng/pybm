@@ -1,11 +1,9 @@
 import logging
 from dataclasses import dataclass, field, asdict
-from typing import List, Optional, Dict, Any, Tuple, Union
+from typing import List, Optional, Dict, Any, Tuple
 
 from pybm.util.git import map_commits_to_tags
 from pybm.mixins import StateMixin
-
-ConfigValue = Union[str, int, float]
 
 
 @dataclass(frozen=True)
@@ -88,7 +86,7 @@ class GitGroup:
 
 @dataclass
 class RunnerGroup:
-    className: str = "pybm.runners.TimeitRunner"
+    className: str = "pybm.runners.stdlib.TimeitRunner"
     resultDirectory: str = "results"
     failFast: bool = False
     numRepetitions: int = 1
@@ -99,7 +97,7 @@ class RunnerGroup:
 
 @dataclass
 class BuilderGroup:
-    className: str = "pybm.builders.StdlibBuilder"
+    className: str = "pybm.builders.stdlib.VenvBuilder"
     homeDirectory: str = ""
     localWheelCaches: str = ""
     persistentVenvOptions: str = ""
@@ -109,7 +107,7 @@ class BuilderGroup:
 
 @dataclass
 class ReporterGroup:
-    className: str = "pybm.reporters.JSONReporter"
+    className: str = "pybm.reporters.console.JSONConsoleReporter"
     resultDirectory: str = "results"
     targetTimeUnit: str = "usec"
     significantDigits: int = 2
