@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional, Union
 
-from pybm.builders import PythonEnvBuilder
+from pybm.builders.base import PythonEnvBuilder
 from pybm.config import PybmConfig
 from pybm.exceptions import BuilderError
 from pybm.specs import PythonSpec
@@ -14,7 +14,7 @@ from pybm.util.common import version_string
 
 # TODO: Subclass directly from venv.EnvBuilder instead of going the
 #  subprocess route
-class StdlibBuilder(PythonEnvBuilder):
+class VenvBuilder(PythonEnvBuilder):
     """Python standard library virtual environment builder class."""
 
     def __init__(self, config: PybmConfig):
@@ -55,8 +55,8 @@ class StdlibBuilder(PythonEnvBuilder):
         else:
             env_dir = (Path(self.venv_home) / destination).resolve()
 
-        # THIS LINE IS EXTREMELY IMPORTANT. It resolves symlinks if the
-        # given python interpreter was a symlink to begin with.
+        # THIS LINE IS EXTREMELY IMPORTANT. Resolve symlinks if the
+        # given Python interpreter was a symlink to begin with.
         resolved_executable = Path(executable).resolve()
 
         command = [str(resolved_executable), "-m", "venv", str(env_dir)]
@@ -70,7 +70,7 @@ class StdlibBuilder(PythonEnvBuilder):
 
         executable = self.get_executable(env_dir)
         python_version = version_string(self.get_python_version(executable))
-        return PythonSpec(root=env_dir,
+        return PythonSpec(root=str(env_dir),
                           executable=executable,
                           version=python_version,
                           packages=self.list_packages(executable))
