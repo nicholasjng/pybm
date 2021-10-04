@@ -7,7 +7,7 @@ from typing import List, Any, Dict, Optional
 
 import pybm.runners.util as runner_util
 from pybm.config import PybmConfig
-from pybm.runners.runner import BenchmarkRunner
+from pybm.runners.base import BenchmarkRunner
 from pybm.status_codes import SUCCESS
 from pybm.util.common import dfilter
 from pybm.util.functions import is_valid_timeit_target
