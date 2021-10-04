@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
-from pybm.builders import PythonEnvBuilder
+from pybm.builders.base import PythonEnvBuilder
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_builder_class
 from pybm.env_store import EnvironmentStore

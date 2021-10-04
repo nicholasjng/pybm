@@ -4,7 +4,7 @@ from pybm import PybmConfig
 from pybm.command import CLICommand
 from pybm.config import get_reporter_class
 from pybm.exceptions import PybmError
-from pybm.reporters import BenchmarkReporter
+from pybm.reporters.base import BenchmarkReporter
 from pybm.status_codes import ERROR, SUCCESS
 from pybm.util.path import get_subdirs
 
@@ -17,8 +17,7 @@ class ReportCommand(CLICommand):
 
     def __init__(self):
         super(ReportCommand, self).__init__(name="report")
-        config = PybmConfig.load(".pybm/config.yaml")
-        self.reporter: BenchmarkReporter = get_reporter_class(config)
+        self.config = PybmConfig.load(".pybm/config.yaml")
 
     def add_arguments(self):
         self.parser.add_argument("run",
@@ -70,23 +69,24 @@ class ReportCommand(CLICommand):
         self.add_arguments()
         options = self.parser.parse_args(args)
 
+        reporter: BenchmarkReporter = get_reporter_class(config=self.config)
+
         # TODO: Parse run to fit schema
         # run = options.run
         ref = options.ref
 
-        result_dir = self.reporter.result_dir
+        result_dir = reporter.result_dir
         # TODO: Make this dynamic to support other run identifiers
         result = sorted(get_subdirs(result_dir))[-1]
         result_path = result_dir / result / ref
         if result_path.exists():
-            self.reporter.report(ref=ref,
-                                 result=result,
-                                 target_filter=options.target_filter,
-                                 benchmark_filter=options.benchmark_filter,
-                                 context_filter=options.context_filter)
+            reporter.report(ref=ref,
+                            result=result,
+                            target_filter=options.target_filter,
+                            benchmark_filter=options.benchmark_filter,
+                            context_filter=options.context_filter)
         else:
             raise PybmError(f"No benchmark results found for ref "
                             f"{ref!r} in the requested run.")
-
 
         return SUCCESS

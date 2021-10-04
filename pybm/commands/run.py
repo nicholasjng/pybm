@@ -6,7 +6,7 @@ from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_runner_class
 from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
-from pybm.runners.runner import BenchmarkRunner
+from pybm.runners.base import BenchmarkRunner
 from pybm.runners.util import create_subdir, create_rundir
 from pybm.status_codes import SUCCESS, ERROR
 
@@ -19,8 +19,7 @@ class RunCommand(CLICommand):
 
     def __init__(self):
         super(RunCommand, self).__init__(name="run")
-        config = PybmConfig.load(".pybm/config.yaml")
-        self.runner: BenchmarkRunner = get_runner_class(config)
+        self.config = PybmConfig.load(".pybm/config.yaml")
 
     def add_arguments(self):
         self.parser.add_argument("benchmarks",
@@ -95,11 +94,13 @@ class RunCommand(CLICommand):
         self.add_arguments()
         options = self.parser.parse_args(args)
 
+        runner: BenchmarkRunner = get_runner_class(config=self.config)
+
         verbose: bool = options.verbose
         env_ids: list[str] = options.environments or []
         run_all: bool = options.run_all
 
-        result_dir = create_rundir(self.runner.result_dir)
+        result_dir = create_rundir(runner.result_dir)
         benchmark_path = Path(options.benchmarks)
 
         if benchmark_path.is_absolute():
@@ -126,7 +127,7 @@ class RunCommand(CLICommand):
                 target_envs = [env_store.get(attr, val) for val in env_ids]
 
         for environment in target_envs:
-            self.runner.check_required_packages(environment=environment)
+            runner.check_required_packages(environment=environment)
             subdir = create_subdir(result_dir=result_dir,
                                    environment=environment)
             print(f"Starting benchmarking run in environment "
@@ -137,7 +138,7 @@ class RunCommand(CLICommand):
             print(f"Discovering benchmark targets in "
                   f"environment {environment.name!r}.....", end="")
             # attempting to discover identifier in worktree
-            benchmark_targets = self.runner.find_targets(path=path)
+            benchmark_targets = runner.find_targets(path=path)
             print("failed.") if not benchmark_targets else print("done.")
             # stupid name, only used for printing below
             n = len(benchmark_targets)
@@ -146,7 +147,7 @@ class RunCommand(CLICommand):
                       f"environment {environment.name!r}.")
                 for i, benchmark in enumerate(benchmark_targets):
                     print(f"Running benchmark {benchmark}.....[{i + 1}/{n}]")
-                    rc, data = self.runner.dispatch(
+                    rc, data = runner.dispatch(
                         benchmark=benchmark,
                         environment=environment,
                         repetitions=options.repetitions,
@@ -164,7 +165,7 @@ class RunCommand(CLICommand):
                 msg = f"Benchmark selector {benchmark_path!r} did not match " \
                       f"any directories or Python files in environment " \
                       f"{environment.name!r}."
-                if self.runner.fail_fast:
+                if runner.fail_fast:
                     error_msg = "Aborted benchmarking run because fast " \
                                 "failure mode was enabled."
                     raise PybmError("\n".join([msg, error_msg]))
