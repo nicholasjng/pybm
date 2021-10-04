@@ -1,22 +1,19 @@
 import sys
 from typing import List, Optional, Dict, Any
 
-import google_benchmark as gbm
-from absl import app
-
 import pybm.runners.util as runner_util
+from pybm import PybmError
 from pybm.config import PybmConfig
-from pybm.runners.runner import BenchmarkRunner
+from pybm.runners.base import BenchmarkRunner
 from pybm.util.common import lfilter
 
+try:
+    import google_benchmark as gbm
+    from absl import app
 
-def flags_parser(argv: List[str]):
-    argv = gbm.initialize(argv)
-    return app.parse_flags_with_usage(argv)
-
-
-def run_benchmarks(argv: List[str] = None):
-    return gbm.run_benchmarks()
+    GBM_INSTALLED = True
+except ImportError:
+    GBM_INSTALLED = False
 
 
 class GoogleBenchmarkRunner(BenchmarkRunner):
@@ -26,8 +23,26 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
     """
 
     def __init__(self, config: PybmConfig):
-        super().__init__(config=config)
         self.required_packages = ["google-benchmark==0.2.0"]
+        if not GBM_INSTALLED:
+            raise PybmError(
+                "Missing dependencies. You attempted to use the "
+                "Google Benchmark runner without having the "
+                "required dependencies installed. To do so, "
+                "please run the command `pybm env install root "
+                f"{' '.join(self.required_packages)}` while "
+                f"inside your root virtual environment.\n "
+                f"BEWARE: As of 10/2021, Google Benchmark does "
+                f"not have source wheels available for any "
+                f"platforms outside of Linux, and Python versions "
+                f"outside of Python 3.6-3.8. If you want to use "
+                f"Google Benchmark on any platform or Python "
+                f"interpreter outside this group, you will have "
+                f"to build the wheel from source. This requires "
+                f"Bazel; for information on Bazel installation, "
+                f"see "
+                f"https://docs.bazel.build/versions/4.2.1/install.html.")
+        super().__init__(config=config)
         self.with_interleaving: bool = config.get_value(
             "runner.GoogleBenchmarkWithRandomInterleaving")
         self.aggregates_only: bool = config.get_value(
@@ -54,6 +69,14 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
     def run_benchmark(self,
                       argv: List[str] = None,
                       context: Dict[str, Any] = None) -> int:
+
+        def flags_parser(argv: List[str]):
+            argv = gbm.initialize(argv)
+            return app.parse_flags_with_usage(argv)
+
+        def run_benchmarks(argv: List[str] = None):
+            return gbm.run_benchmarks()
+
         # TODO: See if this works
         assert context is not None, "need to specify a module context"
         argv = argv or sys.argv
