@@ -6,7 +6,7 @@ from typing import Union, Optional, Any, Dict, List, Callable
 
 from pybm import PybmConfig
 from pybm.exceptions import PybmError
-from pybm.reporters import BenchmarkReporter
+from pybm.reporters.base import BenchmarkReporter
 from pybm.util.common import flatten, lfilter, lfilter_regex, lmap, dvmap, \
     dfilter_regex, partition_n
 from pybm.util.path import list_contents
@@ -136,9 +136,9 @@ def compare_results(results: List[Dict[str, Any]],
     return results + fillers
 
 
-class JSONReporter(BenchmarkReporter):
+class JSONConsoleReporter(BenchmarkReporter):
     def __init__(self, config: PybmConfig):
-        super(JSONReporter, self).__init__(config=config)
+        super(JSONConsoleReporter, self).__init__(config=config)
         self.padding = 1
         self.formatters: Dict[str, Callable] = {
             "time": lambda x: f"{x:.{self.significant_digits}f}",
