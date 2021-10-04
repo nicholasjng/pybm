@@ -118,6 +118,7 @@ def resolve_commit(ref: str) -> str:
 
 
 def disambiguate_info(info: str) -> Optional[str]:
+    attr: Optional[str] = None
     if Path(info).exists() and is_git_worktree(info):
         attr = "root"
     elif is_valid_sha1_part(info):
@@ -126,6 +127,4 @@ def disambiguate_info(info: str) -> Optional[str]:
         attr = "branch"
     elif info in list_tags():
         attr = "tag"
-    else:
-        attr = None
     return attr

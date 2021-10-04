@@ -6,7 +6,7 @@ from typing import Optional, List, Any, Dict
 
 from .config import PybmConfig, get_runner_class
 from .exceptions import PybmError
-from .runners.runner import BenchmarkRunner
+from .runners.base import BenchmarkRunner
 from .status_codes import SUCCESS
 
 
