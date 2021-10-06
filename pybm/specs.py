@@ -15,8 +15,12 @@ class PythonSpec:
     packages: List[str] = field(default_factory=list)
     locations: List[str] = field(default_factory=list)
 
+    def update_packages(self, packages: List[str]):
+        self.packages.clear()
+        self.packages.extend(packages)
 
-@dataclass
+
+@dataclass(frozen=True)
 class Worktree:
     """Dataclass representing a git worktree specification."""
     root: str
@@ -72,16 +76,27 @@ class BenchmarkEnvironment(StateMixin):
 
 @dataclass
 class CoreGroup:
-    logFile: str = "logs/logs.txt"
+    datetimeFormatter: str = "%d/%m/%Y, %H:%M:%S"
     defaultLevel: int = logging.DEBUG
+    envFile: str = ".pybm/envs.yaml"
+    logFile: str = "logs/logs.txt"
     loggingFormatter: str = "%(asctime)s — %(name)-12s " \
                             "— %(levelname)s — %(message)s"
-    datetimeFormatter: str = "%d/%m/%Y, %H:%M:%S"
 
 
 @dataclass
 class GitGroup:
     createWorktreeInParentDirectory: bool = True
+
+
+@dataclass
+class BuilderGroup:
+    className: str = "pybm.builders.stdlib.VenvBuilder"
+    homeDirectory: str = ""
+    localWheelCaches: str = ""
+    persistentVenvOptions: str = ""
+    persistentPipInstallOptions: str = ""
+    persistentPipUninstallOptions: str = ""
 
 
 @dataclass
@@ -96,18 +111,11 @@ class RunnerGroup:
 
 
 @dataclass
-class BuilderGroup:
-    className: str = "pybm.builders.stdlib.VenvBuilder"
-    homeDirectory: str = ""
-    localWheelCaches: str = ""
-    persistentVenvOptions: str = ""
-    persistentPipInstallOptions: str = ""
-    persistentPipUninstallOptions: str = ""
-
-
-@dataclass
 class ReporterGroup:
     className: str = "pybm.reporters.console.JSONConsoleReporter"
     resultDirectory: str = "results"
     targetTimeUnit: str = "usec"
     significantDigits: int = 2
+
+
+EmptyPythonSpec = PythonSpec(root="", executable="", version="")

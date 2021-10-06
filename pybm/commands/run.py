@@ -110,7 +110,7 @@ class RunCommand(CLICommand):
                             f"enable running benchmarks in multiple "
                             f"environments.")
 
-        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+        with EnvironmentStore(".pybm/config.yaml", verbose) as env_store:
             if len(env_ids) == 0:
                 if not run_all and len(env_store.environments) > 1:
                     raise PybmError("No environments were specified as "
@@ -122,9 +122,7 @@ class RunCommand(CLICommand):
                 if run_all:
                     target_envs = env_store.environments
             else:
-                # TODO: Find envs by attributes other than name
-                attr = "name"
-                target_envs = [env_store.get(attr, val) for val in env_ids]
+                target_envs = [env_store.get(val) for val in env_ids]
 
         for environment in target_envs:
             runner.check_required_packages(environment=environment)

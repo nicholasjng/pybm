@@ -50,10 +50,11 @@ class VenvBuilder(PythonEnvBuilder):
                verbose: bool = False) -> PythonSpec:
         options = options or []
         # create the venv in the worktree or in a special home directory
+        dest = Path(destination)
         if self.venv_home == "":
-            env_dir = Path(destination) / "venv"
+            env_dir = dest / "venv"
         else:
-            env_dir = (Path(self.venv_home) / destination).resolve()
+            env_dir = (Path(self.venv_home) / dest.name).resolve()
 
         # THIS LINE IS EXTREMELY IMPORTANT. Resolve symlinks if the
         # given Python interpreter was a symlink to begin with.
@@ -75,25 +76,27 @@ class VenvBuilder(PythonEnvBuilder):
                           version=python_version,
                           packages=self.list_packages(executable))
 
-    @staticmethod
-    def delete(env_dir: Union[str, Path], verbose: bool = False) -> None:
-        def onerror(ex_type, value, _):
-            print("failed.")
-            print(f"Attempt to remove virtual environment raised an exception "
-                  f"of type {ex_type}:")
-            print(str(value))
+    def delete(self, env_dir: Union[str, Path], verbose: bool = False) -> None:
+        path = Path(env_dir)
+        if not path.exists() or not path.is_dir():
+            raise BuilderError(f"No virtual environment found at location"
+                               f" {env_dir}: Location does not exist or is "
+                               f"not a directory.")
+        elif not self.is_valid_venv(path):
+            raise BuilderError(f"Given directory {env_dir} was not recognized "
+                               f"as a valid virtual environment.")
 
-        if Path(env_dir).exists():
-            print(f"Removing virtual environment at location {env_dir}.....",
-                  end="")
-            shutil.rmtree(env_dir, onerror=onerror)
-            print("done.")
+        print(f"Removing virtual environment at location {env_dir}.....",
+              end="")
+        shutil.rmtree(env_dir)
+        print("done.")
 
     def link_existing(self,
                       env_dir: Union[str, Path],
                       verbose: bool = False):
         print(f"Attempting to link existing virtual environment in location "
               f"{env_dir}.....")
+        # TODO: This discovery stuff should go into caller routine
         if (Path(self.venv_home) / env_dir).exists():
             path = Path(self.venv_home) / env_dir
         else:
@@ -115,12 +118,13 @@ class VenvBuilder(PythonEnvBuilder):
         return spec
 
     def install_packages(self,
-                         executable: str,
+                         spec: PythonSpec,
                          packages: Optional[List[str]] = None,
                          requirements_file: Optional[str] = None,
                          options: Optional[List[str]] = None,
                          verbose: bool = False) -> None:
         options = options or []
+        executable = spec.executable
         command = [executable, "-m", "pip", "install"]
         if packages is not None:
             pass
@@ -140,43 +144,46 @@ class VenvBuilder(PythonEnvBuilder):
         options += [f"--find-links={loc}" for loc in self.wheel_caches]
         command += list(set(options))
 
-        location = Path(executable).parents[1]
         pkgs = ", ".join(packages)
         print(f"Installing packages {pkgs} into virtual environment"
-              f" in location {location}.....", end="")
+              f" in location {spec.root}.....", end="")
         self.run_subprocess(command)
         # this only runs if the subprocess succeeds
         print("done.")
         print(f"Successfully installed packages {pkgs} into virtual "
-              f"environment in location {location}.")
+              f"environment in location {spec.root}.")
+        new_packages = self.list_packages(executable=executable)
+        spec.update_packages(packages=new_packages)
 
     def uninstall_packages(self,
-                           executable: str,
+                           spec: PythonSpec,
                            packages: List[str],
                            options: Optional[List[str]] = None,
                            verbose: bool = False) -> None:
         options = options or []
         options += self.pip_uninstall_options
+        executable = spec.executable
         command = [executable, "-m", "pip", "uninstall", *packages]
         command += list(set(options))
 
         pkgs = ", ".join(packages)
-        location = Path(executable).parents[1]
         print(f"Uninstalling packages {pkgs} from virtual environment"
-              f" in location {location}.....", end="")
+              f" in location {spec.root}.....", end="")
         self.run_subprocess(command)
         # this only runs if the subprocess succeeds
         print("done.")
         print(f"Successfully uninstalled packages {pkgs} from virtual "
-              f"environment in location {location}.")
+              f"environment in location {spec.root}.")
+        new_packages = self.list_packages(executable=executable)
+        spec.update_packages(packages=new_packages)
 
-    def list_packages(self, executable: str,
+    def list_packages(self, executable: Union[str, Path],
                       verbose: bool = False) -> List[str]:
-        command = [executable, "-m", "pip", "list", "--format=freeze"]
+        command = [str(executable), "-m", "pip", "list", "--format=freeze"]
+        # `pip list` output: table header, separator, package list
+        # _, packages = flat_pkg_table[0], flat_pkg_table[2:]
+        # return lmap(lambda x: "==".join(x.split()[:2]), packages)
 
         rc, pip_output = self.run_subprocess(command, print_status=False)
 
         return pip_output.splitlines()
-        # `pip list` output: table header, separator, package list
-        # _, packages = flat_pkg_table[0], flat_pkg_table[2:]
-        # return lmap(lambda x: "==".join(x.split()[:2]), packages)

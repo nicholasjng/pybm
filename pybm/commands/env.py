@@ -1,6 +1,7 @@
 import argparse
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import List
 
 from pybm.builders.base import PythonEnvBuilder
@@ -11,7 +12,6 @@ from pybm.exceptions import PybmError, BuilderError
 from pybm.git import GitWorktreeWrapper
 from pybm.logging import get_logger
 from pybm.status_codes import ERROR, SUCCESS
-from pybm.util.git import disambiguate_info
 from pybm.util.print import format_environments
 
 logger = get_logger(__name__)
@@ -192,7 +192,7 @@ class EnvCommand(CLICommand):
         wt, python_spec = None, None
         print(f"Attempting to create benchmark environment for git ref "
               f"{options.commit_ish!r}.")
-        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+        with EnvironmentStore(".pybm/config.yaml", verbose) as env_store:
             try:
                 wt = git.add_worktree(
                     commit_ish=options.commit_ish,
@@ -203,7 +203,7 @@ class EnvCommand(CLICommand):
                 if options.link_dir is None:
                     python_spec = builder.create(
                         options.python_executable,
-                        destination=wt.root,
+                        destination=Path(wt.root) / "venv",
                         options=options.venv_options)
                 else:
                     python_spec = builder.link_existing(options.link_dir)
@@ -212,11 +212,9 @@ class EnvCommand(CLICommand):
                 required = get_runner_requirements(config=self.config)
                 required.append("git+https://github.com/nicholasjng/pybm")
                 builder.install_packages(
-                    executable=python_spec.executable,
+                    spec=python_spec,
                     packages=required,
                     verbose=verbose)
-
-                python_spec.packages.extend(required)
             except BuilderError:
                 if python_spec is not None:
                     builder.delete(python_spec.root)
@@ -230,34 +228,26 @@ class EnvCommand(CLICommand):
                                      worktree=wt,
                                      python=python_spec,
                                      created=str(datetime.now()))
-                # else: raise an error here
 
     def delete(self, options: argparse.Namespace, verbose: bool):
         builder: PythonEnvBuilder = get_builder_class(config=self.config)
         git: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
 
-        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+        with EnvironmentStore(".pybm/config.yaml", verbose) as env_store:
             info = options.identifier
-            # check for known git info
-            attr = disambiguate_info(info)
-            if attr is None:
-                attr = "name"
-            print(f"Attempting to remove benchmark environment "
-                  f"with {attr} {info!r}.")
-            if attr != "name":
-                attr = "worktree." + attr
-            # TODO: Allow deletion by attrs other than name
-            env_to_remove = env_store.get(attr, info)
+            env_to_remove = env_store.get(info)
             env_name = env_to_remove.name
-            print(f"Found matching benchmarking environment {env_name!r}, "
+            print(f"Found matching benchmark environment {env_name!r}, "
                   "starting removal.")
             # Remove venv first LIFO style to avoid git problems
-            builder.delete(env_to_remove.get_value("python.root"))
+            venv_root = Path(env_to_remove.get_value("python.root"))
+            if venv_root.exists():
+                builder.delete(venv_root)
             git.remove_worktree(
                 env_to_remove.get_value("worktree.root"),
                 force=options.force)
-            env_store.delete(attr, info)
-            print(f"Successfully removed benchmarking environment "
+            env_store.delete(env_to_remove)
+            print(f"Successfully removed benchmark environment "
                   f"{env_name!r}.")
 
         return SUCCESS
@@ -265,45 +255,38 @@ class EnvCommand(CLICommand):
     def install(self, options: argparse.Namespace, verbose: bool):
         builder: PythonEnvBuilder = get_builder_class(config=self.config)
 
-        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
-            target_env = env_store.get("name", options.identifier)
-            executable = target_env.get_value("python.executable")
+        with EnvironmentStore(".pybm/config.yaml", verbose) as env_store:
+            target_env = env_store.get(options.identifier)
             builder.install_packages(
-                executable=executable,
+                spec=target_env.python,
                 packages=options.packages,
                 requirements_file=options.requirements_file,
                 options=options.pip_options,
                 verbose=verbose)
-            new_pkgs = builder.list_packages(executable)
-            target_env.set_value("python.packages", new_pkgs, typecheck=False)
 
         return SUCCESS
 
     def uninstall(self, options: argparse.Namespace, verbose: bool):
         builder: PythonEnvBuilder = get_builder_class(config=self.config)
 
-        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
-            target_env = env_store.get("name", options.identifier)
-            executable = target_env.get_value("python.executable")
+        with EnvironmentStore(".pybm/config.yaml", verbose) as env_store:
+            target_env = env_store.get(options.identifier)
             builder.uninstall_packages(
-                executable=executable,
+                spec=target_env.python,
                 packages=options.packages,
                 options=options.pip_options,
                 verbose=verbose)
-            new_pkgs = builder.list_packages(executable)
-            target_env.set_value("python.packages", new_pkgs, typecheck=False)
 
         return SUCCESS
 
     @staticmethod
     def list(options: argparse.Namespace, verbose: bool):
-        with EnvironmentStore(".pybm/envs.yaml", verbose) as env_store:
+        with EnvironmentStore(".pybm/config.yaml", verbose) as env_store:
             format_environments(env_store.environments)
         return SUCCESS
 
     def update(self, options: argparse.Namespace, verbose: bool):
         raise PybmError("env updating is not implemented yet.")
-        # return ERROR
 
     def run(self, args: List[str]):
         logger.debug("Running command: \"{cmd}\"".format(

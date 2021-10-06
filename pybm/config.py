@@ -41,6 +41,7 @@ class PybmConfig(StateMixin):
                             f"to set up environments or run benchmarks.")
         with open(path, "r") as config_file:
             spec = yaml.load(config_file, Loader=yaml.FullLoader)
+
         return PybmConfig(
             core=CoreGroup(**spec["core"]),
             git=GitGroup(**spec["git"]),
@@ -68,7 +69,8 @@ class PybmConfig(StateMixin):
         print(f"Describing configuration option {attr!r}.")
         print(f"Value type:    {value_type}")
         print(f"Current value: {current!r}")
-        print(description_db[group][name])
+        print(description_db[group][name] or
+              f"No description available for {group} attribute {name}.")
 
 
 def get_builder_class(config: PybmConfig):
@@ -181,5 +183,16 @@ description_db: Dict[str, Descriptions] = {
                      "want to supply your own custom runner class, set this "
                      "value to point to your custom subclass of "
                      "pybm.runners.BenchmarkRunner.",
+        "failFast": "",
+        "numRepetitions": "",
+        "contextProviders": "",
+        "GoogleBenchmarkWithRandomInterleaving": "",
+        "GoogleBenchmarkSaveAggregatesOnly": "",
     },
+    "reporter": {
+        "className": "",
+        "resultDirectory": "",
+        "targetTimeUnit": "",
+        "significantDigits": "",
+    }
 }

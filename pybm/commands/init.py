@@ -11,6 +11,7 @@ from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.status_codes import SUCCESS
 from pybm.util.git import is_main_worktree
+from pybm.util.path import list_contents
 
 
 class InitCommand(CLICommand):
@@ -31,6 +32,7 @@ class InitCommand(CLICommand):
                                  metavar="<config-dir>",
                                  help="Directory in which to store the pybm "
                                       "configuration data.")
+        self.parser.add_argument("--runner",)
         self.parser.add_argument("--rm",
                                  action="store_true",
                                  default=False,
@@ -38,9 +40,8 @@ class InitCommand(CLICommand):
                                  help="Overwrite existing configuration.")
 
     @staticmethod
-    def discover_existing_environments(cfg_path: Path, env_path: Path,
-                                       verbose: bool = False):
-        with EnvironmentStore(env_path, verbose, True) as env_store:
+    def discover_existing_environments(cfg_path: Path, verbose: bool = False):
+        with EnvironmentStore(cfg_path, verbose, True) as env_store:
             config = PybmConfig.load(cfg_path)
             builder_class: PythonEnvBuilder = get_builder_class(config)
             git: GitWorktreeWrapper = GitWorktreeWrapper(config)
@@ -76,12 +77,11 @@ class InitCommand(CLICommand):
                             "as a git repository.")
 
         config_dir = Path(options.config_dir)
-        config_path = config_dir / "config.yaml"
-        env_path = config_dir / "envs.yaml"
         config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = (config_dir / "config.yaml")
         if options.remove_existing:
-            for p in [config_path, env_path]:
-                p.unlink(missing_ok=True)
+            for p in list_contents(config_dir):
+                (config_dir / p).unlink(missing_ok=True)
         if config_path.exists():
             raise PybmError("Configuration file already exists. "
                             "If you want to write a new config file, "
@@ -90,6 +90,5 @@ class InitCommand(CLICommand):
         else:
             PybmConfig().save(config_path)
 
-        self.discover_existing_environments(config_path, env_path,
-                                            verbose=verbose)
+        self.discover_existing_environments(config_path, verbose=verbose)
         return SUCCESS

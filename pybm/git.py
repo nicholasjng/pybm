@@ -93,8 +93,8 @@ class GitWorktreeWrapper(SubprocessMixin):
     def get_worktree_by_attr(self, attr: str, value: str) \
             -> Optional[Worktree]:
         attr_checks = {
-            "root": lambda x: str(Path(value).resolve()) == x,
-            "commit": lambda x: value in x,
+            "root": lambda x: Path(x).name == Path(value).name,
+            "commit": lambda x: value in x,  # partial commit match
             "branch": lambda x: x.split("/")[-1] == value,
             "tag": lambda x: x.split("/")[-1] == value,
         }

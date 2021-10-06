@@ -119,7 +119,11 @@ def resolve_commit(ref: str) -> str:
 
 def disambiguate_info(info: str) -> Optional[str]:
     attr: Optional[str] = None
-    if Path(info).exists() and is_git_worktree(info):
+    p, pp = Path(info), Path.cwd().parent / info
+    # check if path is present in either cwd or parent
+    if p.exists() and is_git_worktree(p):
+        attr = "root"
+    elif pp.exists() and is_git_worktree(pp):
         attr = "root"
     elif is_valid_sha1_part(info):
         attr = "commit"

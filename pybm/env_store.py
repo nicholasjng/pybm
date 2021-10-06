@@ -4,18 +4,25 @@ from typing import List, Any, Optional, Union
 
 import yaml
 
+from pybm import PybmConfig
 from pybm.exceptions import PybmError
+from pybm.git import GitWorktreeWrapper
 from pybm.specs import Worktree, PythonSpec, BenchmarkEnvironment
 from pybm.util.common import lmap
+from pybm.util.git import disambiguate_info
 
 
 class EnvironmentStore:
     """Environment context manager keeping track of the present benchmarking
     environments."""
 
-    def __init__(self, path: Union[str, Path], verbose: bool = False,
+    def __init__(self,
+                 path: Union[str, Path],
+                 verbose: bool = False,
                  missing_ok: bool = False):
-        self.env_file = Path(path)
+        self.config = PybmConfig.load(path=path)
+        self.git: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
+        self.env_file = Path(self.config.get_value("core.envFile"))
         self.verbose = verbose
         self.missing_ok = missing_ok
         self.environments: List[BenchmarkEnvironment] = []
@@ -25,7 +32,6 @@ class EnvironmentStore:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        # if exc_type is None:
         self.save()
 
     def load(self):
@@ -69,37 +75,44 @@ class EnvironmentStore:
         self.environments.append(env)
         return env
 
-    def delete(self, attr: str, value: str) -> BenchmarkEnvironment:
-        env = self.get(attr, value)
+    def delete(self, env: BenchmarkEnvironment) -> BenchmarkEnvironment:
         self.environments.remove(env)
         return env
 
-    def get(self, attr: str, value: Any) -> BenchmarkEnvironment:
+    def get(self, value: Any) -> BenchmarkEnvironment:
+        # check for known git info, otherwise use name
+        info = disambiguate_info(value)
+        if info is not None:
+            attr = "worktree." + info
+        else:
+            attr = "name"
         if self.verbose:
-            display_attr = attr.replace(".", " ")
-            print(f"Attempting to match benchmarking environment with "
-                  f"{display_attr} {value!r}.....", end="")
+            print(f"Attempting to match benchmark environment with "
+                  f"{attr.replace('.', ' ')} {value!r}.....", end="")
         try:
-            env = next(
-                e for e in self.environments if e.get_value(attr) == value)
+            if info is not None:
+                env = next(
+                    e for e in self.environments if e.worktree ==
+                    self.git.get_worktree_by_attr(info, value)
+                )
+            else:
+                env = next(
+                    e for e in self.environments if e.name == value
+                )
             if self.verbose:
                 print("success.")
             return env
         except StopIteration:
             if self.verbose:
                 print("failed")
-            raise PybmError(f"No benchmark environment found with value"
-                            f" {value} for attribute {attr!r}.")
-
-    # def set(self, env: BenchmarkEnvironment, attr: str, value: Any):
-    #     # assumes the environment is still in the list
-    #     env.set_value(attr, value)
+            raise PybmError(f"No benchmark environment found with "
+                            f"{attr.replace('.', ' ')} {value!r}.")
 
     def update(self, name: str, attr: str, value: Any) -> None:
         # TODO: Only some values (e.g. linked venv, worktree branch) make
         #  sense to update. Filter by admissible updates with a handler
         #  scheme
-        env_to_update = self.delete("name", name)
+        env_to_update = self.delete(name)
         env_to_update.set_value(attr=attr, value=value)
         env_to_update.set_value("last_modified", str(datetime.datetime.now()))
         self.environments.append(env_to_update)

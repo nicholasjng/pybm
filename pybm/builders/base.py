@@ -29,8 +29,7 @@ class PythonEnvBuilder(SubprocessMixin):
                verbose: bool = False) -> PythonSpec:
         raise NotImplementedError
 
-    @staticmethod
-    def delete(env_dir: Union[str, Path], verbose: bool = False) -> None:
+    def delete(self, env_dir: Union[str, Path], verbose: bool = False) -> None:
         raise NotImplementedError
 
     def link_existing(self, env_dir: Union[str, Path],
@@ -38,7 +37,7 @@ class PythonEnvBuilder(SubprocessMixin):
         raise NotImplementedError
 
     def install_packages(self,
-                         executable: str,
+                         spec: PythonSpec,
                          packages: Optional[List[str]] = None,
                          requirements_file: Optional[str] = None,
                          options: Optional[List[str]] = None,
@@ -46,13 +45,14 @@ class PythonEnvBuilder(SubprocessMixin):
         raise NotImplementedError
 
     def uninstall_packages(self,
-                           executable: str,
+                           spec: PythonSpec,
                            packages: List[str],
                            options: Optional[List[str]] = None,
                            verbose: bool = False) -> None:
         raise NotImplementedError
 
-    def list_packages(self, executable: str, verbose: bool = False):
+    def list_packages(self, executable: Union[str, Path],
+                      verbose: bool = False):
         raise NotImplementedError
 
     def get_python_version(self,
