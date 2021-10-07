@@ -95,8 +95,8 @@ class EnvCommand(CLICommand):
             self.parser.add_argument("--venv-options",
                                      nargs="*",
                                      default=None,
-                                     help="Comma- or space-separated list of "
-                                          "command line options for virtual "
+                                     help="Space-separated list of command "
+                                          "line options for virtual "
                                           "environment creation using venv. "
                                           "To get a comprehensive list of "
                                           "options, run `python -m venv -h`.",
@@ -116,21 +116,19 @@ class EnvCommand(CLICommand):
                                           "changes in the process.")
         elif subcommand == "install":
             self.parser.add_argument("identifier",
-                                     metavar="<identifier>",
+                                     metavar="<id>",
                                      help="Information that uniquely "
                                           "identifies the environment. "
                                           "Can be name, checked out "
-                                          "commit, branch name, directory, "
-                                          "or custom user-defined tags.")
+                                          "commit/branch/tag name, "
+                                          "or worktree root directory.")
             self.parser.add_argument("packages",
                                      nargs="*",
                                      default=None,
                                      metavar="<packages>",
                                      help="Package dependencies to install "
                                           "into the new virtual environment "
-                                          "using pip. All packages must be "
-                                          "specified in a format "
-                                          "understandable to pip.")
+                                          "using pip.")
             self.parser.add_argument("-r",
                                      type=str,
                                      default=None,
@@ -142,17 +140,17 @@ class EnvCommand(CLICommand):
             self.parser.add_argument("--pip-options",
                                      nargs="*",
                                      default=None,
-                                     help="Comma- or space-separated list of "
-                                          "command line options for "
-                                          "dependency installation in the "
-                                          "created virtual environment "
-                                          "using `pip install`. To get a "
+                                     help="Space-separated list of command "
+                                          "line options for dependency "
+                                          "installation in the created"
+                                          "virtual environment using "
+                                          "`pip install`. To get a "
                                           "comprehensive list of options, "
                                           "run `python -m pip install -h`.",
                                      metavar="<pip-options>")
         elif subcommand == "uninstall":
             self.parser.add_argument("identifier",
-                                     metavar="<identifier>",
+                                     metavar="<id>",
                                      help="Information that uniquely "
                                           "identifies the environment. "
                                           "Can be name, checked out "
@@ -163,17 +161,15 @@ class EnvCommand(CLICommand):
                                      metavar="<packages>",
                                      help="Package dependencies to uninstall "
                                           "from the benchmarking environment "
-                                          "using pip. All packages must be "
-                                          "specified in a format "
-                                          "understandable to pip.")
+                                          "using pip.")
             self.parser.add_argument("--pip-options",
                                      nargs="*",
                                      default=None,
-                                     help="Comma- or space-separated list "
-                                          "of command line options for "
-                                          "dependency removal in the "
-                                          "benchmarking environment "
-                                          "using `pip uninstall`. To get a "
+                                     help="Space-separated list of command "
+                                          "line options for dependency "
+                                          "removal in the benchmark "
+                                          "environment using "
+                                          "`pip uninstall`. To get a "
                                           "comprehensive list of options, "
                                           "run `python -m pip uninstall -h`.",
                                      metavar="<pip-options>")

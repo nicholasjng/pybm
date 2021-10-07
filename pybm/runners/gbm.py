@@ -6,6 +6,7 @@ from pybm import PybmError
 from pybm.config import PybmConfig
 from pybm.runners.base import BenchmarkRunner
 from pybm.util.common import lfilter
+from pybm.util.extras import get_extras
 
 try:
     import google_benchmark as gbm
@@ -23,7 +24,7 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
     """
 
     def __init__(self, config: PybmConfig):
-        self.required_packages = ["google-benchmark==0.2.0"]
+        self.required_packages = get_extras()["gbm"]
         if not GBM_INSTALLED:
             raise PybmError(
                 "Missing dependencies. You attempted to use the "

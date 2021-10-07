@@ -1,4 +1,5 @@
 from setuptools import setup, find_packages
+from pybm.util.extras import get_extras
 
 
 def get_requirements() -> list[str]:
@@ -22,6 +23,7 @@ setup(
                 "repository.",
     packages=find_packages(),
     install_requires=get_requirements(),
+    extras_require=get_extras(),
     entry_points={
         'console_scripts': ['pybm=pybm.main:main']
     },
