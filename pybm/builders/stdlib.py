@@ -52,7 +52,7 @@ class VenvBuilder(PythonEnvBuilder):
         # create the venv in the worktree or in a special home directory
         dest = Path(destination)
         if self.venv_home == "":
-            env_dir = dest / "venv"
+            env_dir = dest
         else:
             env_dir = (Path(self.venv_home) / dest.name).resolve()
 
@@ -187,3 +187,10 @@ class VenvBuilder(PythonEnvBuilder):
         rc, pip_output = self.run_subprocess(command, print_status=False)
 
         return pip_output.splitlines()
+
+    def is_linked_venv(self, spec: PythonSpec):
+        root = Path(spec.root)
+        if self.venv_home != "" and root.parent == Path(self.venv_home):
+            return True
+
+        return False

@@ -210,8 +210,7 @@ class GitWorktreeWrapper(SubprocessMixin):
             print(f"Given identifier {info} was determined to be "
                   f"the {attr!r} attribute of the desired worktree.")
 
-        print(f"Attempting to match git worktree with "
-              f"{attr} {info!r}.....", end="")
+        print(f"Matching git worktree with {attr} {info!r}.....", end="")
         wt = self.get_worktree_by_attr(attr, info)
         if wt is None:
             print("failed.")

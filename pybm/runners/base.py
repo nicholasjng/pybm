@@ -114,7 +114,7 @@ class BenchmarkRunner(SubprocessMixin):
             benchmark_filter=benchmark_filter,
             benchmark_context=benchmark_context,
         )
-        return self.run_subprocess(command, reraise_on_error=False,)
+        return self.run_subprocess(command, reraise_on_error=False)
 
     def run_benchmark(self,
                       argv: List[str] = None,
