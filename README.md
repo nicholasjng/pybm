@@ -5,10 +5,12 @@
 **pybm** is a Python CLI for repeatable, declarative benchmarking of Python code
 inside a git repository. It uses git's version control mechanisms to track
 changes in performance between points of interest in git history. Out of many
-possible use cases, two specific ones immediately emerge:
+possible use cases, three specific ones immediately emerge:
 
 - Comparing performance of a feature branch to the current development branch.
 - Tracking changes in performance across git history (e.g. releases, refactors).
+- Adding a benchmarking step into a continuous integration (CI) pipeline, and
+  rejecting changes if they reduce performance to a significant degree.
 
 ## Notable features
 
@@ -40,8 +42,8 @@ The most central requirement to **pybm** is `git`, a version control system,
 which is responsible for building the benchmark environments correctly.
 Currently, at least `git version 2.17.0` (April 2018) is required for pybm to
 work correctly. To check your git version, you can run `git --version`, which
-should result in an output showing the version number, similar to the one
-seen above.
+should result in an output showing the version number, similar to the one seen
+above.
 
 On the Python side, in its most standard configuration, **pybm** works almost
 entirely within the Python standard library - only the `yaml` package is

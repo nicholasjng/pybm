@@ -1,10 +1,19 @@
 from setuptools import setup, find_packages
-from pybm.util.extras import get_extras
 
 
 def get_requirements() -> list[str]:
     with open("requirements.txt", "r") as f:
         return f.readlines()
+
+
+def get_extras():
+    """Extra pybm functionality, specified as a valid argument to
+    setuptools.setup's 'extras_require' keyword argument."""
+    extra_features = {
+        "gbm": ["google-benchmark==0.2.0"]
+    }
+    extra_features["all"] = sum(extra_features.values(), start=[])
+    return extra_features
 
 
 def get_version(fp) -> str:
