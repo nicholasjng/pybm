@@ -12,8 +12,8 @@ Please navigate to a folder suitable to you and clone into the pybm sum example
 repository:
 
 ```shell
-git clone https://github.com/nicholasjng/pybm-sum-example.git
-cd pybm-sum-example
+git clone https://github.com/nicholasjng/pybm-sum-example.git sum-example
+cd sum-example
 git checkout master
 ```
 
@@ -61,9 +61,9 @@ better?
 
 ## Reducing it to linear time
 
-Alright, maybe the improvement here is already too obvious. Of course, we can
-easily cut the complexity by summing the actual numbers instead of ones. The new
-functions then looks like this:
+Alright, maybe the improvement here is already obvious. Of course, we can easily
+cut the complexity by summing the actual numbers instead of ones. The new
+function then looks like this:
 
 ```python
 def my_sum(n: int):
@@ -75,8 +75,8 @@ def my_sum(n: int):
 ```
 
 But we need to adhere to a normal development workflow here! So instead of just
-hacking the new algorithm and pushing the changes, we need to create a feature
-branch (we're calling it "linear-time"), containing our improved algorithm. The
+hacking the new algorithm and pushing the changes, we should create a feature
+branch (we're calling it "linear-time") containing our improved algorithm. The
 branch is already present in the example repository that you previously checked
 out. You can create a pybm benchmark environment for it with the following
 command, run from the repository root folder on `master`:
@@ -122,7 +122,7 @@ def my_sum(n: int):
     return n * (n + 1) // 2
 ```
 
-No more loops, no `if`s, no buts: We have reduced the summation problem to a
+No more loops, no `if`s, no buts: We have reduced the summation to a
 _constant time_ problem! This looks very promising. Again, this algorithm is
 already implemented on another branch called `constant-time`, for which we can
 also create a benchmark environment:
@@ -171,18 +171,19 @@ if __name__ == "__main__":
     pybm.run(context=globals())
 ```
 
-Aside from some sys-path-hacking to get the python path set up correctly, the
-test file is very simple: We import our function `my_sum`, sum up all numbers
-from 1 to 10000, and run the benchmark when running the module as `__main__`.
-Everything else is set up by pybm's default configuration, so we do not need to
-tweak more options and spend more time to get up and running.
+Aside from some sys-path-hacking to get the python path set up correctly
+(which you should just ignore right now), the test file is very simple: We
+import our function `my_sum`, sum up all numbers from 1 to 10000, and run the
+benchmark when executing the module as `__main__`. Everything else is set up by
+pybm's default configuration, so we do not need to tweak more options and spend
+more time to get up and running.
 
 NOTE: The above benchmark file is the same on all three branches, and there is a
 good reason for it! When comparing the different implementations, we do need the
-benchmarking procedure to stay the same.
+benchmarking _procedure_ itself to stay the same to yield comparable results.
 
 ```shell
-# Tell pybm to run the benchmarks in the benchmarks directory in all environments.
+# Tells pybm to run the benchmarks in the benchmarks directory in all environments.
 pybm run benchmarks/ --all
 
 Starting benchmarking run in environment 'root'.
@@ -207,9 +208,9 @@ And there we have it! Instead of the manual rinse-and-repeat in a checkout
 branch->benchmark->save-results kind of workflow, we obtained all the results we
 need in one single command. Very nice!
 
-## The numbers
+## And finally... the numbers
 
-And finally, we need to check how big our improvements actually are (or rather,
+Lastly, we need to check how big our improvements actually are (or rather,
 if we have achieved any in the first place!). This is handled by the
 `pybm compare` command, which compares all measured results to a "frame of
 reference" branch, which is taken to be the baseline for performance
@@ -231,8 +232,8 @@ we actually... 10-million-x-ed it. Great work! Our constant time algorithm is
 definitely ready for a pull request :-)
 
 These are of course video game numbers, obtained by algorithmic improvements.
-More common real-world examples would see improvements in the two-to-three digit
-percentage range, but this example above does happen from time to time!
+More common real-world examples would see improvements in the one-to-three digit
+percentage range, but the example you see above does happen from time to time.
 
 And with that, the first pybm tutorial is finished. I hope you enjoyed it, and
 catch you on the next one!
