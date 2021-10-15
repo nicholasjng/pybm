@@ -7,6 +7,7 @@ from pybm.exceptions import PybmError
 from pybm.mixins import SubprocessMixin
 from pybm.specs import BenchmarkEnvironment
 from pybm.util.common import lfilter, lmap
+from pybm.util.imports import convert_to_module
 from pybm.util.path import list_contents
 
 # A context provider produces name and value of a contextual
@@ -48,10 +49,12 @@ class BenchmarkRunner(SubprocessMixin):
 
     def create_flags(
             self,
+            environment: BenchmarkEnvironment,
             num_repetitions: int = 5,
             benchmark_filter: Optional[str] = None,
             benchmark_context: Optional[List[str]] = None) -> List[str]:
         flags, prefix = [], self.prefix
+        ref, _ = environment.worktree.get_ref_and_type(bare=True)
 
         if benchmark_context is None:
             benchmark_context = []
@@ -59,6 +62,8 @@ class BenchmarkRunner(SubprocessMixin):
             # prepend prefix for internal validation
             benchmark_context = lmap(lambda x: self.prefix + "_context=" + x,
                                      benchmark_context)
+        # supply the ref by default.
+        benchmark_context += [f"--benchmark_context=ref={ref}"]
         if benchmark_filter is not None:
             flags.append(f"{prefix}_filter={benchmark_filter}")
 
@@ -70,7 +75,7 @@ class BenchmarkRunner(SubprocessMixin):
         return flags
 
     @staticmethod
-    def find_targets(path: Union[str, Path]):
+    def find_targets(path: Union[str, Path]) -> List[str]:
         benchmark_path = Path(path)
         if benchmark_path.is_dir():
             benchmark_targets = list_contents(benchmark_path,
@@ -95,21 +100,25 @@ class BenchmarkRunner(SubprocessMixin):
 
     def dispatch(
             self,
-            benchmark: Union[str, Path],
+            benchmark: str,
             environment: BenchmarkEnvironment,
             repetitions: int = 1,
+            run_as_module: bool = False,
             benchmark_filter: Optional[str] = None,
             benchmark_context: Optional[List[str]] = None) -> Tuple[int, str]:
         """Runner class method responsible for dispatching a benchmark run
         in a single target file. A subprocess will be spawned executing the
         benchmark in the given environment."""
-
         python = environment.get_value("python.executable")
-        # worktree_root = environment.get_value("worktree.root")
-        ref, _ = environment.worktree.get_ref_and_type(bare=True)
-        # supply the ref by default.
-        command = [python, benchmark, f"--benchmark_context=ref={ref}"]
+
+        if run_as_module:
+            module_name = convert_to_module(benchmark)
+            command = [python, "-m", module_name]
+        else:
+            command = [python, benchmark]
+
         command += self.create_flags(
+            environment=environment,
             num_repetitions=repetitions,
             benchmark_filter=benchmark_filter,
             benchmark_context=benchmark_context,
