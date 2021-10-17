@@ -15,6 +15,12 @@ def module_exists(module_name: str):
     return spec is not None
 
 
+def convert_to_module(file: Union[str, Path]) -> str:
+    fp = Path(file)
+    file_str = (fp.parent / fp.stem).as_posix()
+    return file_str.replace("/", ".")
+
+
 def import_module_from_source(source_path: Union[str, Path]) -> ModuleType:
     # TODO: Use path and extension to come up with a unique name here
     p = Path(source_path)
@@ -23,8 +29,8 @@ def import_module_from_source(source_path: Union[str, Path]) -> ModuleType:
     elif p.suffix != ".py":
         raise PybmError(f"Source path {source_path} is not a Python file.")
 
-    # strip away .py extension and cast to module syntax
-    py_name = p.with_suffix("").as_posix().replace("/", ".")
+    # strip away .py extension and convert to module syntax
+    py_name = convert_to_module(p)
     if py_name in sys.modules:
         # return loaded module
         return sys.modules[py_name]

@@ -47,14 +47,6 @@ class RunCommand(CLICommand):
                                  dest="run_all",
                                  help="Run specified benchmarks in all "
                                       "existing pybm environments.")
-        self.parser.add_argument("--filter",
-                                 type=str,
-                                 default=None,
-                                 dest="benchmark_filter",
-                                 help="Regex filter to selectively run "
-                                      "benchmarks inside the target files. "
-                                      "Only benchmarks matching the given "
-                                      "filter will be run.")
         self.parser.add_argument("--repetitions",
                                  type=int,
                                  default=5,
@@ -65,6 +57,22 @@ class RunCommand(CLICommand):
                                       "statistical significance of "
                                       "performance differences between "
                                       "different environments.")
+        self.parser.add_argument("-m",
+                                 action="store_true",
+                                 default=False,
+                                 dest="run_as_module",
+                                 help="Run benchmark targets as modules. "
+                                      "This is the preferred option if you "
+                                      "are benchmarking code outside of a "
+                                      "package.")
+        self.parser.add_argument("--filter",
+                                 type=str,
+                                 default=None,
+                                 dest="benchmark_filter",
+                                 help="Regex filter to selectively run "
+                                      "benchmarks inside the target files. "
+                                      "Only benchmarks matching the given "
+                                      "filter will be run.")
         self.parser.add_argument("--context",
                                  action="append",
                                  default=None,
@@ -149,6 +157,7 @@ class RunCommand(CLICommand):
                         benchmark=benchmark,
                         environment=environment,
                         repetitions=options.repetitions,
+                        run_as_module=options.run_as_module,
                         benchmark_filter=options.benchmark_filter,
                         benchmark_context=options.benchmark_context)
                     # TODO: Switch this to a general IO Connector later
@@ -161,10 +170,10 @@ class RunCommand(CLICommand):
                             json.dump(json.loads(data), res)
             else:
                 msg = f"Benchmark selector {benchmark_path!r} did not match " \
-                      f"any directories or Python files in environment " \
+                      f"any directory or Python files in environment " \
                       f"{environment.name!r}."
                 if runner.fail_fast:
-                    error_msg = "Aborted benchmarking run because fast " \
+                    error_msg = "Aborted benchmark run because fast " \
                                 "failure mode was enabled."
                     raise PybmError("\n".join([msg, error_msg]))
                 else:
