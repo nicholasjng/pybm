@@ -1,39 +1,71 @@
+import collections
 import json
 import re
+import statistics
 from functools import partial
 from pathlib import Path
-from typing import Union, Optional, Any, Dict, List, Callable
+from statistics import mean
+from typing import Union, Optional, Any, Dict, List, Callable, Tuple
 
 from pybm import PybmConfig
 from pybm.exceptions import PybmError
 from pybm.reporters.base import BenchmarkReporter
 from pybm.util.common import flatten, lfilter, lfilter_regex, lmap, dvmap, \
-    dfilter_regex, partition_n
+    dfilter_regex, partition_n, dmap, tmap
 from pybm.util.path import list_contents
 from pybm.util.print import make_line, make_separator
 
-# timeit logs in seconds, GBM in nanoseconds
+# metric time unit prefix table
 unit_table = {"s": 1., "sec": 1., "ms": 1e-3, "msec": 1e-3,
               "us": 1e-6, "usec": 1e-6, "ns": 1e-9, "nsec": 1e-9}
 
 
 def get_unique_names(results: List[Dict[str, Any]]):
-    names = lmap(lambda x: x["name"], results)
+    if "name" in results[0]:
+        name_key = "name"
+    elif "Benchmark Name" in results[0]:
+        name_key = "Benchmark Name"
+    else:
+        raise AttributeError("Benchmark name could not be found.")
+    names = lmap(lambda x: x[name_key], results)
     return list(set(names))
 
 
-def rescale(time_value: float, current_unit: str, target_unit: str):
+def rescale(key: str, time_value: Tuple[float, float],
+            current_unit: str, target_unit: str):
+    ttype = key.split("_")[0]
+    tkey = ttype.upper() if ttype in ["cpu", "gpu"] else "Wall"
+    tkey += f" Time ({target_unit})"
     if current_unit != target_unit:
         assert current_unit in unit_table, \
             f"unknown time unit {current_unit!r}"
         target = unit_table[target_unit]
         current = unit_table[current_unit]
-        time_value *= current / target
+        time_value = tmap(lambda x: x * current / target, time_value)
     # formatting nsecs as ints is nicer
-    if target_unit in ["ns", "nsec"]:
-        return int(time_value)
+    if target_unit.startswith("ns"):
+        return tkey, tmap(int, time_value)
     else:
-        return time_value
+        return tkey, time_value
+
+
+def reduce(bm: Dict[str, List[Any]]) -> Dict[str, Any]:
+    res = {}
+    # TODO: Enable user-defined reducers
+    for k, v in bm.items():
+        if isinstance(v[0], str):
+            assert len(set(v)) == 1, \
+                f"got multiple values for string key {k!r}"
+            res[k] = v[0]
+        else:
+            value_type: type = type(v[0])
+            mu = mean(v)
+            sigma = statistics.pstdev(v, mu)
+            # ints, floats which are not time values
+            # type casting floors int values
+            # TODO: Allow other forms of reduction
+            res[k] = (value_type(mu), value_type(sigma))
+    return res
 
 
 def process_dict(bm: Dict[str, Any],
@@ -47,22 +79,27 @@ def process_dict(bm: Dict[str, Any],
     ref = context.pop("ref")
     # manual formatting, POSIX style
     target_path = python_file.parent.name + "/" + python_file.name
-    formatted = {"name": target_path + ":" + bm["name"],
-                 "ref": ref}
+    formatted = {"Benchmark Name": target_path + ":" + bm.pop("name"),
+                 "Reference": ref,
+                 "Iterations": bm.pop("iterations")}
 
     time_unit: str = bm.pop("time_unit")
-    time_values: Dict[str, float] = dfilter_regex(".*_time", bm)
+    time_values: Dict[str, float] = dfilter_regex(".*time", bm)
+    for k in list(time_values.keys()):
+        bm.pop(k)
     rescale_fn = partial(rescale,
                          current_unit=time_unit,
                          target_unit=target_time_unit)
-    processed_times: Dict[str, float] = dvmap(rescale_fn, time_values)
+    processed_times: Dict[str, float] = dmap(rescale_fn, time_values)
 
     formatted.update(processed_times)
-    formatted.update({"iterations": bm["iterations"]})
     # merge in the benchmark context entirely
     # TODO: Assert no key occurs twice (i.e. gets overwritten)
     formatted.update(context)
     # TODO: Grab user counters and inject them raw
+    # only thing left should be the user counters
+    formatted.update(bm)
+
     return formatted
 
 
@@ -75,12 +112,14 @@ def process_result(benchmark_obj: Dict[str, Any],
                         f"Result {benchmark_obj} missing at least one "
                         f"of the expected keys {', '.join(keys)}.")
     benchmark_list = benchmark_obj["benchmarks"]
+    # descriptive statistics on times and user counters
+    reduced_list = reduce_results(benchmark_list)
     context = benchmark_obj["context"]
-    do_format = partial(process_dict,
-                        context=context,
-                        target_time_unit=target_time_unit)
-    formatted_list = lmap(do_format, benchmark_list)
-    return formatted_list
+    process_fn = partial(process_dict,
+                         context=context,
+                         target_time_unit=target_time_unit)
+    processed_list = lmap(process_fn, reduced_list)
+    return processed_list
 
 
 def filter_result(res: Dict[str, Any],
@@ -91,7 +130,8 @@ def filter_result(res: Dict[str, Any],
         filtered = dfilter_regex(context_filter, res["context"])
         # add protected context values back
         for val in protected_context:
-            filtered[val] = res[val]
+            if val in res:
+                filtered[val] = res[val]
         res["context"] = filtered
     if benchmark_filter is not None:
         pattern = re.compile(benchmark_filter)
@@ -105,21 +145,19 @@ def compare_results(results: List[Dict[str, Any]],
                     refs: List[str]):
     """Compare results between different refs. Assumes that the results and
     ref lists are sorted in the same order."""
-    anchor_result, *others = results
-    anchor_ref, *other_refs = refs
-    dtime_key = f"dtime_rel ({anchor_ref})"
-    for res in others:
+    assert len(results) > 0, "no results given"
+    anchor_result = results[0]
+    anchor_ref = refs[0]
+    real_key = next(k for k in anchor_result.keys() if k.startswith("Wall"))
+    for res in results:
         # relative time difference and speedup wrt anchor ref
-        speedup = (anchor_result["real_time"] / res["real_time"])
+        speedup = (anchor_result[real_key][0] / res[real_key][0])
         dtime = 1. / speedup - 1.
-        res[dtime_key] = dtime
-        res["speedup"] = speedup
+        res[f"Δt_rel ({anchor_ref})"] = dtime
+        res["Speedup"] = speedup
         # TODO: Pop user counters to push them to the back too
-        res["iterations"] = res.pop("iterations")
+        res["Iterations"] = res.pop("Iterations")
 
-    anchor_result[dtime_key] = 0.0
-    anchor_result["speedup"] = 1.0
-    anchor_result["iterations"] = anchor_result.pop("iterations")
     # TODO: Warn here about a missing result
     missing = len(refs) - len(results)
     fillers = []
@@ -131,9 +169,35 @@ def compare_results(results: List[Dict[str, Any]],
             # pad values according to the dict schema of the anchor ref
             dummy_dict = {k: v if isinstance(v, str) else filler for k, v in
                           anchor_result.items()}
-            dummy_dict["ref"] = ref
+            dummy_dict["Reference"] = ref
             fillers.append(dummy_dict)
     return results + fillers
+
+
+def reduce_results(results: List[Dict[str, Any]]):
+    names = get_unique_names(results)
+    reduced_results = []
+    partitions = partition_n(len(names),
+                             lambda x: names.index(x["name"]),
+                             results)
+
+    def group_partition(p: List[Dict[str, Any]]):
+        # this cannot be empty
+        assert len(p) > 0, "empty partition encountered"
+        res = collections.defaultdict(list)
+        for bm in p:
+            for k, v in bm.items():
+                # filter out rep keys
+                if not k.startswith("repetition"):
+                    res[k].append(v)
+        return res
+
+    for partition in partitions:
+        grouped = group_partition(partition)
+        reduced = reduce(grouped)
+        reduced_results.append(reduced)
+
+    return reduced_results
 
 
 class JSONConsoleReporter(BenchmarkReporter):
@@ -141,9 +205,11 @@ class JSONConsoleReporter(BenchmarkReporter):
         super(JSONConsoleReporter, self).__init__(config=config)
         self.padding = 1
         self.formatters: Dict[str, Callable] = {
-            "time": lambda x: f"{x:.{self.significant_digits}f}",
+            "time": lambda x: f"{x[0]:.{self.significant_digits}f} ±"
+                              f" {x[1]:.2f}",
             "rel_time": lambda x: f"{x:+.2%}",
-            "speedup": lambda x: f"{x:.2f}x",
+            "Speedup": lambda x: f"{x:.2f}x",
+            "Iterations": lambda x: str(x[0]),
         }
 
     def compare(self,
@@ -169,14 +235,14 @@ class JSONConsoleReporter(BenchmarkReporter):
         unique_names = get_unique_names(processed_results)
 
         # group all results by benchmark name
-        grouped_results = partition_n(len(unique_names),
-                                      lambda x: unique_names.index(x["name"]),
-                                      processed_results)
+        grouped_results = partition_n(
+            len(unique_names),
+            lambda x: unique_names.index(x["Benchmark Name"]),
+            processed_results)
         # compare groups of benchmarks
         compared_results = flatten(lmap(compare_fn, grouped_results))
 
-        formatted_results = lmap(self.transform_result, compared_results)
-        self.log_to_console(formatted_results)
+        self.log_to_console(compared_results)
 
     def report(self,
                ref: str,
@@ -191,12 +257,10 @@ class JSONConsoleReporter(BenchmarkReporter):
                             benchmark_filter=benchmark_filter)
         process_fn = partial(process_result,
                              target_time_unit=self.target_time_unit)
-        format_fn = self.transform_result
 
         filtered_results = lmap(filter_fn, benchmark_results)
         processed_results = flatten(lmap(process_fn, filtered_results))
-        formatted_results = lmap(format_fn, processed_results)
-        self.log_to_console(formatted_results)
+        self.log_to_console(processed_results)
 
     def load(self, ref: str, result: Union[str, Path],
              target_filter: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -217,12 +281,14 @@ class JSONConsoleReporter(BenchmarkReporter):
         return results
 
     def log_to_console(self, results: List[Dict[str, str]]):
-        header_widths = lmap(len, results[0].keys())
+        formatted_results = lmap(self.transform_result, results)
+
+        header_widths = lmap(len, formatted_results[0].keys())
         data_widths = zip(header_widths,
-                          *(lmap(len, d.values()) for d in results))
+                          *(lmap(len, d.values()) for d in formatted_results))
         column_widths: List[int] = lmap(max, data_widths)
         padding = self.padding
-        for i, res in enumerate(results):
+        for i, res in enumerate(formatted_results):
             if i == 0:
                 print(make_line(res.keys(), column_widths, padding=padding))
                 print(make_separator(column_widths, padding=padding))
@@ -233,19 +299,12 @@ class JSONConsoleReporter(BenchmarkReporter):
         optionally format them, too (e.g. floating point numbers)."""
         transformed = {}
         for key, value in bm.items():
-            if key.endswith("_time"):
-                key = key.split("_")[0]
-                key = key.upper() if key in ["cpu", "gpu"] else "Wall"
-                key += f" Time ({self.target_time_unit})"
-                value = self.formatters["time"](value)
-            elif key == "name":
-                key = "Benchmark Name"
-            elif key.startswith("dtime"):
-                # relative time difference key
-                key = key.replace("dtime", "Δt")
-                value = self.formatters["rel_time"](value)
+            if key.endswith(f"({self.target_time_unit})"):
+                # add stddev
+                tval = self.formatters["time"](value)
+            elif key.startswith("Δt"):
+                tval = self.formatters["rel_time"](value)
             else:
-                value = self.formatters.get(key, str)(value)
-                key = key.capitalize()
-            transformed[key] = value
+                tval = self.formatters.get(key, str)(value)
+            transformed[key] = tval
         return transformed

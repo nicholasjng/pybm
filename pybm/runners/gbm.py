@@ -5,6 +5,7 @@ import pybm.runners.util as runner_util
 from pybm import PybmError
 from pybm.config import PybmConfig
 from pybm.runners.base import BenchmarkRunner
+from pybm.specs import BenchmarkEnvironment
 from pybm.util.common import lfilter
 from pybm.util.extras import get_extras
 
@@ -51,10 +52,12 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
 
     def create_flags(
             self,
+            environment: BenchmarkEnvironment,
             num_repetitions: int = 1,
             benchmark_filter: Optional[str] = None,
             benchmark_context: Optional[List[str]] = None) -> List[str]:
         flags = super(GoogleBenchmarkRunner, self).create_flags(
+            environment=environment,
             num_repetitions=num_repetitions,
             benchmark_filter=benchmark_filter,
             benchmark_context=benchmark_context
@@ -78,8 +81,6 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
         def run_benchmarks(argv: List[str] = None):
             return gbm.run_benchmarks()
 
-        # TODO: See if this works
-        assert context is not None, "need to specify a module context"
         argv = argv or sys.argv
         # inject environment-specific context into args
         argv += self.get_current_context()
