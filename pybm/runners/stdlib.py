@@ -64,33 +64,43 @@ class TimeitRunner(BenchmarkRunner):
         # valid timeit target <=> is function + takes no args
         module_targets = dfilter(is_valid_timeit_target, module_targets)
 
+        repetitions: int = args.benchmark_repetitions
         benchmark_context: Optional[List[str]] = args.benchmark_context
         # construct and fill context dictionary, add to JSON payload
         json_obj["context"] = self.make_context(benchmark_context)
 
         benchmark_objects = []
-        for name in module_targets.keys():
-            benchmark_obj: Dict[str, Any] = {"name": name}
-            # Source: https://docs.python.org/3/library/timeit.html#examples
-            t_real = timeit.Timer(stmt=f"{name}()",
-                                  setup=f"from __main__ import {name}",
-                                  timer=time.perf_counter)
-            # Explanation real vs. CPU time:
-            # https://stackoverflow.com/questions/25785243/understanding-time-perf-counter-and-time-process-time
-            t_cpu = timeit.Timer(stmt=f"{name}()",
-                                 setup=f"from __main__ import {name}",
-                                 timer=time.process_time)
-            for t, measured in [(t_real, "real_time"), (t_cpu, "cpu_time")]:
-                number, _ = t.autorange(None)
-                # TODO: What if these are different?
-                benchmark_obj["iterations"] = number
-                # TODO: Give option to specify time unit
-                benchmark_obj["time_unit"] = "s"
-                # TODO: Give option to log raw list instead of min
-                benchmark_obj[measured] = min(t.repeat(
-                    repeat=args.benchmark_repetitions, number=number)) / number
 
-            benchmark_objects.append(benchmark_obj)
+        # TODO: Rethink the ordering of these loops
+        for i in range(repetitions):
+            for name in module_targets.keys():
+                benchmark_obj: Dict[str, Any] = {"name": name,
+                                                 "repetitions": repetitions,
+                                                 "repetition_index": i}
+                # Source for import:
+                # https://docs.python.org/3/library/timeit.html#examples
+                t_real = timeit.Timer(stmt=f"{name}()",
+                                      setup=f"from __main__ import {name}",
+                                      timer=time.perf_counter)
+                # Explanation of real vs. CPU time in python's 'time':
+                # https://stackoverflow.com/questions/25785243/understanding-time-perf-counter-and-time-process-time
+                t_cpu = timeit.Timer(stmt=f"{name}()",
+                                     setup=f"from __main__ import {name}",
+                                     timer=time.process_time)
+                for t, measured in [(t_real, "real_time"),
+                                    (t_cpu, "cpu_time")]:
+                    number, _ = t.autorange(None)
+                    # TODO: What if these are different?
+                    benchmark_obj["iterations"] = number
+                    # TODO: Give option to specify time unit
+                    benchmark_obj["time_unit"] = "s"
+                    # TODO: Give option to log raw list instead of min
+                    benchmark_obj[measured] = min(
+                        t.repeat(repeat=args.benchmark_repetitions,
+                                 number=number)
+                    ) / number
+
+                benchmark_objects.append(benchmark_obj)
 
         json_obj["benchmarks"] = benchmark_objects
         # write the JSON object to stdout, to be caught by the subprocess
