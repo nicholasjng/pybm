@@ -10,8 +10,8 @@ from typing import Union, Optional, Any, Dict, List, Callable, Tuple
 from pybm import PybmConfig
 from pybm.exceptions import PybmError
 from pybm.reporters.base import BenchmarkReporter
-from pybm.util.common import flatten, lfilter, lfilter_regex, lmap, dvmap, \
-    dfilter_regex, partition_n, dmap, tmap
+from pybm.util.common import flatten, lfilter, lfilter_regex, dfilter_regex, \
+    partition_n, lmap, dmap, tmap
 from pybm.util.path import list_contents
 from pybm.util.print import make_line, make_separator
 
@@ -39,18 +39,19 @@ def rescale(key: str, time_value: Tuple[float, float],
     if current_unit != target_unit:
         assert current_unit in unit_table, \
             f"unknown time unit {current_unit!r}"
+        assert target_unit in unit_table, \
+            f"unknown target time unit {target_unit!r}"
         target = unit_table[target_unit]
         current = unit_table[current_unit]
-        time_value = tmap(lambda x: x * current / target, time_value)
-    # formatting nsecs as ints is nicer
-    if target_unit.startswith("ns"):
-        return tkey, tmap(int, time_value)
+        scaled_time = tmap(lambda x: x * current / target, time_value)
     else:
-        return tkey, time_value
+        scaled_time = time_value
+
+    return tkey, scaled_time
 
 
 def reduce(bm: Dict[str, List[Any]]) -> Dict[str, Any]:
-    res = {}
+    res: Dict[str, Any] = {}
     # TODO: Enable user-defined reducers
     for k, v in bm.items():
         if isinstance(v[0], str):
@@ -96,7 +97,6 @@ def process_dict(bm: Dict[str, Any],
     # merge in the benchmark context entirely
     # TODO: Assert no key occurs twice (i.e. gets overwritten)
     formatted.update(context)
-    # TODO: Grab user counters and inject them raw
     # only thing left should be the user counters
     formatted.update(bm)
 
@@ -158,7 +158,6 @@ def compare_results(results: List[Dict[str, Any]],
         # TODO: Pop user counters to push them to the back too
         res["Iterations"] = res.pop("Iterations")
 
-    # TODO: Warn here about a missing result
     missing = len(refs) - len(results)
     fillers = []
     if missing > 0:
@@ -205,12 +204,21 @@ class JSONConsoleReporter(BenchmarkReporter):
         super(JSONConsoleReporter, self).__init__(config=config)
         self.padding = 1
         self.formatters: Dict[str, Callable] = {
-            "time": lambda x: f"{x[0]:.{self.significant_digits}f} ±"
-                              f" {x[1]:.2f}",
+            "time": self.format_time,
             "rel_time": lambda x: f"{x:+.2%}",
             "Speedup": lambda x: f"{x:.2f}x",
             "Iterations": lambda x: str(x[0]),
         }
+
+    def format_time(self, time: Tuple[float, float]) -> str:
+        tval, std = time
+        digits = self.significant_digits
+        if self.target_time_unit.startswith("ns"):
+            # formatting nsecs as ints is nicer
+            res = f"{int(tval)} ± {int(std)}"
+        else:
+            res = f"{tval:.{digits}f} ± {std:.{digits}f}"
+        return res
 
     def compare(self,
                 *refs: str,
@@ -293,6 +301,7 @@ class JSONConsoleReporter(BenchmarkReporter):
                 print(make_line(res.keys(), column_widths, padding=padding))
                 print(make_separator(column_widths, padding=padding))
             print(make_line(res.values(), column_widths, padding=padding))
+            # TODO: Print summary about improvements etc.
 
     def transform_result(self, bm: Dict[str, Any]) -> Dict[str, str]:
         """Finalize column header names, cast all values to string and
@@ -300,11 +309,10 @@ class JSONConsoleReporter(BenchmarkReporter):
         transformed = {}
         for key, value in bm.items():
             if key.endswith(f"({self.target_time_unit})"):
-                # add stddev
-                tval = self.formatters["time"](value)
+                value_type = "time"
             elif key.startswith("Δt"):
-                tval = self.formatters["rel_time"](value)
+                value_type = "rel_time"
             else:
-                tval = self.formatters.get(key, str)(value)
-            transformed[key] = tval
+                value_type = key
+            transformed[key] = self.formatters.get(value_type, str)(value)
         return transformed
