@@ -1,21 +1,20 @@
 from pathlib import Path
-from typing import Optional, Tuple, Callable, List, Any, Union, Dict
+from typing import Optional, Tuple, Callable, List, Any, Dict
 
 import pybm.runners.util as runner_util
 from pybm import PybmConfig
 from pybm.exceptions import PybmError
-from pybm.mixins import SubprocessMixin
 from pybm.specs import BenchmarkEnvironment
-from pybm.util.common import lfilter, lmap
+from pybm.util.common import lmap
 from pybm.util.imports import convert_to_module
-from pybm.util.path import list_contents
+from pybm.util.subprocess import run_subprocess
 
 # A context provider produces name and value of a contextual
 # piece of information, e.g. processor architecture, cwd etc.
 ContextProvider = Callable[[], Tuple[str, str]]
 
 
-class BenchmarkRunner(SubprocessMixin):
+class BenchmarkRunner:
     """Base class for all pybm benchmark runners."""
 
     def __init__(self, config: PybmConfig):
@@ -23,7 +22,7 @@ class BenchmarkRunner(SubprocessMixin):
         self.prefix = "--benchmark"
 
         # required packages for the runner
-        self.required_packages: list[str] = []
+        self.required_packages: List[str] = []
 
         # result saving directory; create if non-existent
         self.result_dir: str = config.get_value("runner.resultDirectory")
@@ -74,24 +73,6 @@ class BenchmarkRunner(SubprocessMixin):
         flags += benchmark_context
         return flags
 
-    @staticmethod
-    def find_targets(path: Union[str, Path]) -> List[str]:
-        benchmark_path = Path(path)
-        if benchmark_path.is_dir():
-            benchmark_targets = list_contents(benchmark_path,
-                                              file_suffix=".py",
-                                              names_only=False)
-        elif benchmark_path.is_file():
-            benchmark_targets = [str(path)]
-        else:
-            # assume it is a glob pattern
-            ppath, glob = benchmark_path.parent, benchmark_path.name
-            benchmark_targets = lmap(str, ppath.glob(glob))
-        # filter out __init__.py files by default
-        benchmark_targets = lfilter(lambda x: not x.endswith("__init__.py"),
-                                    benchmark_targets)
-        return benchmark_targets
-
     def get_current_context(self) -> List[str]:
         ctx_info = [
             "--benchmark_context={0}={1}".format(*ctx()) for ctx in
@@ -121,9 +102,9 @@ class BenchmarkRunner(SubprocessMixin):
             environment=environment,
             num_repetitions=repetitions,
             benchmark_filter=benchmark_filter,
-            benchmark_context=benchmark_context,
-        )
-        return self.run_subprocess(command, reraise_on_error=False)
+            benchmark_context=benchmark_context)
+
+        return run_subprocess(command, errors="ignore")
 
     def run_benchmark(self,
                       argv: List[str] = None,

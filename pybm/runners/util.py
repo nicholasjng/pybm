@@ -1,14 +1,17 @@
+import contextlib
 import functools
 import re
 from pathlib import Path
 from typing import List, Any, Dict, Union, Optional, Tuple
 
-from pybm.exceptions import PybmError
-from pybm.specs import BenchmarkEnvironment
-from pybm.util.common import lfilter, dfilter, dkfilter
+from pybm.exceptions import PybmError, GitError
+from pybm.specs import Worktree
+from pybm.util.common import lfilter, dfilter, dkfilter, lmap
 from pybm.util.functions import is_context_provider
+from pybm.util.git import get_from_history, clean_worktree, has_untracked_files
 from pybm.util.imports import import_from_module
-from pybm.util.path import get_subdirs
+from pybm.util.path import get_subdirs, list_contents
+from pybm.util.print import abbrev_home
 
 
 def create_rundir(result_dir: Union[str, Path]) -> Path:
@@ -23,16 +26,74 @@ def create_rundir(result_dir: Union[str, Path]) -> Path:
 
 
 def create_subdir(result_dir: Union[str, Path],
-                  environment: BenchmarkEnvironment) -> Path:
-    ref, ref_type = environment.worktree.get_ref_and_type()
+                  worktree: Worktree) -> Path:
+    ref, ref_type = worktree.get_ref_and_type(bare=True)
     if ref_type in ["branch", "tag"]:
-        suffix = ref.split("/", maxsplit=2)[-1]
-        suffix = suffix.replace("/", "-")
-    else:
-        suffix = ref
-    result_subdir = Path(result_dir) / suffix
+        ref = ref.replace("/", "-")
+
+    result_subdir = Path(result_dir) / ref
     result_subdir.mkdir(parents=False, exist_ok=False)
     return result_subdir
+
+
+@contextlib.contextmanager
+def discover_targets(worktree: Worktree,
+                     source_path: Union[str, Path],
+                     source_ref: Optional[str] = None):
+    root = worktree.root
+    ref, ref_type = worktree.get_ref_and_type(bare=True)
+    checkout_complete = False
+    print(f"Starting benchmark run in worktree {abbrev_home(root)} for "
+          f"{ref_type} {ref!r}.")
+    try:
+        if source_ref is not None:
+            if has_untracked_files(root):
+                raise PybmError("Sourcing benchmarks from other git "
+                                "reference requires a clean worktree, "
+                                "but there are "
+                                "untracked files present in the worktree "
+                                f"{root}. To fix this, either add "
+                                f"untracked files to this worktree's staging "
+                                f"area with `git add`, "
+                                f"or remove the files with `git clean`.")
+            # check out benchmarks from history
+            print(f"Checking out benchmark resource {source_path} from git "
+                  f"reference {source_ref!r} into worktree "
+                  f"{abbrev_home(root)}.")
+            get_from_history(ref=source_ref, resource=source_path,
+                             directory=root)
+            checkout_complete = True
+
+        print(f"Discovering benchmark targets in worktree "
+              f"{abbrev_home(root)} on {ref_type} {ref!r}.....", end="")
+        benchmark_path = Path(root) / source_path
+        if benchmark_path.is_dir():
+            benchmark_targets = list_contents(benchmark_path,
+                                              file_suffix=".py",
+                                              names_only=False)
+        elif benchmark_path.is_file():
+            benchmark_targets = [str(source_path)]
+        else:
+            # assume it is a glob pattern
+            ppath, glob = benchmark_path.parent, benchmark_path.name
+            benchmark_targets = lmap(str, ppath.glob(glob))
+        # filter out __init__.py files by default
+        benchmark_targets = lfilter(lambda x: not x.endswith("__init__.py"),
+                                    benchmark_targets)
+        print("failed." if not benchmark_targets else "done.")
+
+        yield benchmark_targets
+    except GitError:
+        # Error in the benchmark or JSON writing
+        pass
+    finally:
+        if source_ref is not None and checkout_complete:
+            # restore benchmark contents from original ref
+            get_from_history(ref=ref, resource=source_path, directory=root)
+            # revert checkout of untracked files with `git clean`
+            clean_worktree(directory=root)
+            print(f"Finished benchmark run in worktree "
+                  f"{abbrev_home(root)} on {ref_type} {ref!r}.")
 
 
 def filter_targets(module_context: Dict[str, Any],

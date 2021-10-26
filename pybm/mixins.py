@@ -1,43 +1,10 @@
 import operator
-import subprocess
-from typing import Optional, Any, List, Tuple
+from typing import Optional, Any
 
 from pybm.exceptions import PybmError
 from pybm.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-# TODO: Rethink this
-class SubprocessMixin:
-    """Useful utilities for CLI command wrappers such as for git, venv."""
-    ex_type: type = PybmError
-
-    def run_subprocess(self,
-                       command: List[str],
-                       reraise_on_error: bool = True,
-                       print_status: bool = True,
-                       **subprocess_kwargs) -> Tuple[int, str]:
-        # TODO: Move printing in here entirely to avoid fragmentation
-        full_command = " ".join(command)
-        logger.debug(f"Running command {full_command}...")
-        p = subprocess.run(command,
-                           stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE,
-                           encoding="utf-8",
-                           **subprocess_kwargs)
-        rc = p.returncode
-        if rc != 0:
-            msg = f"The command `{full_command}` returned the non-zero " \
-                  f"exit code {rc}.\nFurther information (stderr " \
-                  f"output of the subprocess):\n{p.stderr}"
-            if print_status:
-                print("failed.")
-                if not reraise_on_error:
-                    print(msg)
-            if reraise_on_error:
-                raise self.ex_type(msg)
-        return rc, p.stdout
 
 
 class StateMixin:

@@ -5,15 +5,15 @@ import shutil
 from pathlib import Path
 from typing import List, Optional, Union
 
+import pybm.builders.util as builder_util
 from pybm.builders.base import PythonEnvBuilder
 from pybm.config import PybmConfig
 from pybm.exceptions import BuilderError
 from pybm.specs import PythonSpec
 from pybm.util.common import version_string
+from pybm.util.subprocess import run_subprocess
 
 
-# TODO: Subclass directly from venv.EnvBuilder instead of going the
-#  subprocess route
 class VenvBuilder(PythonEnvBuilder):
     """Python standard library virtual environment builder class."""
 
@@ -66,11 +66,12 @@ class VenvBuilder(PythonEnvBuilder):
         command += list(set(options))
         print(f"Creating virtual environment in directory {env_dir}.....",
               end="")
-        self.run_subprocess(command)
+        run_subprocess(command)
         print("done.")
 
-        executable = self.get_executable(env_dir)
-        python_version = version_string(self.get_python_version(executable))
+        executable = builder_util.get_executable(env_dir)
+        python_version = version_string(
+            builder_util.get_python_version(executable))
         return PythonSpec(root=str(env_dir),
                           executable=executable,
                           version=python_version,
@@ -82,7 +83,7 @@ class VenvBuilder(PythonEnvBuilder):
             raise BuilderError(f"No virtual environment found at location"
                                f" {env_dir}: Location does not exist or is "
                                f"not a directory.")
-        elif not self.is_valid_venv(path):
+        elif not builder_util.is_valid_venv(path):
             raise BuilderError(f"Given directory {env_dir} was not recognized "
                                f"as a valid virtual environment.")
 
@@ -101,13 +102,14 @@ class VenvBuilder(PythonEnvBuilder):
             path = Path(self.venv_home) / env_dir
         else:
             path = Path(env_dir)
-        if not self.is_valid_venv(path, verbose=verbose):
+        if not builder_util.is_valid_venv(path, verbose=verbose):
             msg = f"The specified path {env_dir} was not recognized " \
                   f"as a valid virtual environment, since no `python`/" \
                   f"`pip` executables or symlinks were discovered."
             raise BuilderError(msg)
-        executable = self.get_executable(env_dir)
-        python_version = version_string(self.get_python_version(executable))
+        executable = builder_util.get_executable(env_dir)
+        python_version = version_string(
+            builder_util.get_python_version(executable))
         packages = self.list_packages(executable, verbose=verbose)
         spec = PythonSpec(root=str(env_dir),
                           executable=executable,
@@ -147,7 +149,7 @@ class VenvBuilder(PythonEnvBuilder):
         pkgs = ", ".join(packages)
         print(f"Installing packages {pkgs} into virtual environment"
               f" in location {spec.root}.....", end="")
-        self.run_subprocess(command)
+        run_subprocess(command)
         # this only runs if the subprocess succeeds
         print("done.")
         print(f"Successfully installed packages {pkgs} into virtual "
@@ -169,7 +171,7 @@ class VenvBuilder(PythonEnvBuilder):
         pkgs = ", ".join(packages)
         print(f"Uninstalling packages {pkgs} from virtual environment"
               f" in location {spec.root}.....", end="")
-        self.run_subprocess(command)
+        run_subprocess(command)
         # this only runs if the subprocess succeeds
         print("done.")
         print(f"Successfully uninstalled packages {pkgs} from virtual "
@@ -184,7 +186,7 @@ class VenvBuilder(PythonEnvBuilder):
         # _, packages = flat_pkg_table[0], flat_pkg_table[2:]
         # return lmap(lambda x: "==".join(x.split()[:2]), packages)
 
-        rc, pip_output = self.run_subprocess(command, print_status=False)
+        rc, pip_output = run_subprocess(command)
 
         return pip_output.splitlines()
 
@@ -192,5 +194,4 @@ class VenvBuilder(PythonEnvBuilder):
         root = Path(spec.root)
         if self.venv_home != "" and root.parent == Path(self.venv_home):
             return True
-
         return False

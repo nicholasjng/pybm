@@ -1,13 +1,14 @@
 import json
+import warnings
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_runner_class
 from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
 from pybm.runners.base import BenchmarkRunner
-from pybm.runners.util import create_subdir, create_rundir
+from pybm.runners.util import create_subdir, create_rundir, discover_targets
 from pybm.status_codes import SUCCESS, ERROR
 
 
@@ -41,12 +42,39 @@ class RunCommand(CLICommand):
                                       "error will be raised, unless the "
                                       "\"--all\" switch is used.",
                                  metavar="<environment(s)>")
-        self.parser.add_argument("--all",
+        self.parser.add_argument("-m",
+                                 action="store_true",
+                                 default=False,
+                                 dest="run_as_module",
+                                 help="Run benchmark targets as modules. "
+                                      "This is the preferred option if you "
+                                      "are benchmarking code outside of a "
+                                      "package.")
+        self.parser.add_argument("--checkouts",
+                                 action="store_true",
+                                 default=False,
+                                 help="Run benchmarks in checkout mode in "
+                                      "environment \"root\". Here, instead "
+                                      "of using checked out physical "
+                                      "worktrees, the benchmarks are run with "
+                                      "`git checkout` commands. Use this if "
+                                      "you do not have any changing "
+                                      "requirements in between benchmarks.")
+        self.parser.add_argument("-A", "--all",
                                  action="store_true",
                                  default=False,
                                  dest="run_all",
                                  help="Run specified benchmarks in all "
                                       "existing pybm environments.")
+        self.parser.add_argument("-S", "--source",
+                                 type=str,
+                                 default=None,
+                                 dest="benchmark_source",
+                                 metavar="<git-ref>",
+                                 help="Optionally source benchmark targets "
+                                      "from a different git reference. "
+                                      "Useful when benchmarking library code "
+                                      "with a custom benchmark suite.")
         self.parser.add_argument("--repetitions",
                                  type=int,
                                  default=5,
@@ -56,23 +84,14 @@ class RunCommand(CLICommand):
                                       "can boost confidence about the"
                                       "statistical significance of "
                                       "performance differences between "
-                                      "different environments.")
-        self.parser.add_argument("-m",
-                                 action="store_true",
-                                 default=False,
-                                 dest="run_as_module",
-                                 help="Run benchmark targets as modules. "
-                                      "This is the preferred option if you "
-                                      "are benchmarking code outside of a "
-                                      "package.")
+                                      "different implementations.")
         self.parser.add_argument("--filter",
                                  type=str,
                                  default=None,
                                  dest="benchmark_filter",
-                                 help="Regex filter to selectively run "
-                                      "benchmarks inside the target files. "
-                                      "Only benchmarks matching the given "
-                                      "filter will be run.")
+                                 help="Regex used to selectively run "
+                                      "benchmarks inside the target files "
+                                      "matching the given expression.")
         self.parser.add_argument("--context",
                                  action="append",
                                  default=None,
@@ -107,50 +126,80 @@ class RunCommand(CLICommand):
         verbose: bool = options.verbose
         env_ids: list[str] = options.environments or []
         run_all: bool = options.run_all
+        checkout_mode: bool = options.checkouts
+        source_ref: Optional[str] = options.benchmark_source
+        source_path = Path(options.benchmarks)
 
         result_dir = create_rundir(runner.result_dir)
-        benchmark_path = Path(options.benchmarks)
 
-        if benchmark_path.is_absolute():
-            raise PybmError(f"Benchmark path {benchmark_path} was given in "
+        if source_path.is_absolute():
+            raise PybmError(f"Benchmark path {source_path} was given in "
                             f"absolute form. Please specify the targets "
                             f"by a path relative to the worktree root to"
                             f"enable running benchmarks in multiple "
                             f"environments.")
 
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
-        if len(env_ids) == 0:
+
+        if len(env_ids) > 0:
+            if run_all:
+                raise PybmError("The -A/--all switch can only be used as a "
+                                "substitute for specific environment IDs, but "
+                                "the following environments were requested:"
+                                f"{', '.join(env_ids)}. Please either omit "
+                                f"the -A/-all switch or the specific "
+                                f"environment IDs.")
+        else:
+            if checkout_mode:
+                raise PybmError(
+                    "When running in checkout mode, please specify at "
+                    "least one valid git reference to benchmark. To "
+                    "benchmark the current checkout "
+                    "in the \"root\" environment, use the command "
+                    f"`pybm run {source_path} root`.")
             if not run_all and len(env_store.environments) > 1:
                 raise PybmError("No environments were specified as "
                                 "positional arguments to `pybm run`, "
                                 "but more than one environment exists "
                                 "in the current repository. Please "
                                 "supply your desired target environments "
-                                "specifically when calling `pybm run`.")
-        if run_all:
-            target_envs = env_store.environments
-        else:
-            target_envs = [env_store.get(val) for val in env_ids]
+                                "specifically when calling `pybm run`, or "
+                                "use the -A/--all switch.")
 
-        for environment in target_envs:
+        if run_all:
+            env_ids = [env.name for env in env_store.environments]
+
+        for env_id in env_ids:
+            if checkout_mode:
+                environment = env_store.get("root")
+                # check out given reference
+                environment.worktree.switch(ref=env_id)
+            else:
+                environment = env_store.get(env_id)
+
             runner.check_required_packages(environment=environment)
             subdir = create_subdir(result_dir=result_dir,
-                                   environment=environment)
-            print(f"Starting benchmarking run in environment "
-                  f"{environment.name!r}.")
-            # join relative path with worktree root
-            path = Path(environment.get_value("worktree.root")
-                        ) / benchmark_path
-            print(f"Discovering benchmark targets in "
-                  f"environment {environment.name!r}.....", end="")
-            # attempting to discover identifier in worktree
-            benchmark_targets = runner.find_targets(path=path)
-            print("failed.") if not benchmark_targets else print("done.")
-            # stupid name, only used for printing below
-            n = len(benchmark_targets)
-            if n > 0:
-                print(f"Found a total of {n} benchmark targets for "
-                      f"environment {environment.name!r}.")
+                                   worktree=environment.worktree)
+
+            with discover_targets(worktree=environment.worktree,
+                                  source_path=source_path,
+                                  source_ref=source_ref) as benchmark_targets:
+                n = len(benchmark_targets)
+                if n > 0:
+                    print(f"Found a total of {n} benchmark targets for "
+                          f"environment {environment.name!r}.")
+                else:
+                    msg = f"Benchmark selector {source_path!r} did not " \
+                          f"match any directory or Python files in " \
+                          f"environment {environment.name!r}."
+                    if runner.fail_fast:
+                        error_msg = "Aborted benchmark run because " \
+                                    "fast failure mode was enabled."
+                        raise PybmError("\n".join([msg, error_msg]))
+                    else:
+                        warnings.warn(msg)
+                        continue
+
                 for i, benchmark in enumerate(benchmark_targets):
                     print(f"Running benchmark {benchmark}.....[{i + 1}/{n}]")
                     rc, data = runner.dispatch(
@@ -168,17 +217,5 @@ class RunCommand(CLICommand):
                         result_file = subdir / result_name
                         with open(result_file, "w") as res:
                             json.dump(json.loads(data), res)
-            else:
-                msg = f"Benchmark selector {benchmark_path!r} did not match " \
-                      f"any directory or Python files in environment " \
-                      f"{environment.name!r}."
-                if runner.fail_fast:
-                    error_msg = "Aborted benchmark run because fast " \
-                                "failure mode was enabled."
-                    raise PybmError("\n".join([msg, error_msg]))
-                else:
-                    print("Warning: " + msg)
-            print(f"Finished benchmarking run in environment "
-                  f"{environment.name!r}.")
         print("Finished benchmarking in all specified environments.")
         return SUCCESS
