@@ -2,8 +2,11 @@ import logging
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any, Tuple
 
-from pybm.util.git import map_commits_to_tags
+from pybm.exceptions import PybmError
 from pybm.mixins import StateMixin
+from pybm.util.git import map_commits_to_tags, disambiguate_info, \
+    resolve_commit, checkout
+from pybm.util.print import abbrev_home
 
 
 @dataclass(frozen=True)
@@ -20,7 +23,7 @@ class PythonSpec:
         self.packages.extend(packages)
 
 
-@dataclass(frozen=True)
+@dataclass
 class Worktree:
     """Dataclass representing a git worktree specification."""
     root: str
@@ -37,16 +40,29 @@ class Worktree:
         return Worktree(root=root, branch=branch_id, commit=commit, tag=tag)
 
     def get_ref_and_type(self, bare: bool = False) -> Tuple[str, str]:
-        # at most two of commit, branch, tag are not None
-        # bare mode = only return the name, not the git refs/... prefix
+        # either the branch OR tag are not None
         if self.branch is not None:
-            branch = self.branch.split("/")[-1] if bare else self.branch
+            branch = self.branch.split("/", maxsplit=2)[-1] if bare else \
+                self.branch
             return branch, "branch"
         elif self.tag is not None:
-            tag = self.tag.split("/")[-1] if bare else self.tag
+            tag = self.tag.split("/", maxsplit=2)[-1] if bare else self.tag
             return tag, "tag"
         else:
             return self.commit, "commit"
+
+    def switch(self, ref: str):
+        ref_type = disambiguate_info(ref)
+        if ref_type not in ["commit", "branch", "tag"]:
+            raise PybmError(f"Could not switch checkout of worktree "
+                            f"{self.root}: Object "
+                            f"{ref!r} could not be "
+                            f"understood as a valid git reference.")
+        checkout(ref=ref, cwd=self.root)
+        self.__setattr__(ref_type, ref)
+        self.commit = resolve_commit(ref)
+        print(f"Successfully checked out {ref_type} {ref!r} in worktree "
+              f"{abbrev_home(self.root)}.")
 
 
 @dataclass(unsafe_hash=True)

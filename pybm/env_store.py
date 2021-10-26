@@ -15,7 +15,8 @@ from pybm.git import GitWorktreeWrapper
 from pybm.specs import Worktree, PythonSpec, BenchmarkEnvironment
 from pybm.util.common import lmap
 from pybm.util.git import disambiguate_info
-from pybm.util.print import format_environments
+from pybm.util.print import abbrev_home, calculate_column_widths, make_line, \
+    make_separator
 
 
 def cleanup_venv(builder, worktree: Worktree, spec: PythonSpec):
@@ -167,10 +168,8 @@ class EnvironmentStore:
 
         # check for known git info, otherwise use name
         info = disambiguate_info(value)
-        if info is not None:
-            attr = "worktree " + info
-        else:
-            attr = "name"
+        attr = "worktree " + info if info else "name"
+
         if self.verbose:
             print(f"Matching benchmark environment with {attr} "
                   f"{value!r}.....", end="")
@@ -191,8 +190,24 @@ class EnvironmentStore:
             raise PybmError(f"No benchmark environment found with "
                             f"{attr} {value!r}.")
 
-    def list(self):
-        format_environments(self.environments)
+    def list(self, padding: int = 1):
+        column_names = ["Name", "Git ref", "Ref type", "Worktree directory",
+                        "Python version"]
+        env_data = [column_names]
+        for env in self.environments:
+            values = [env.get_value("name")]
+            values.extend(env.worktree.get_ref_and_type())
+            root: str = env.get_value("worktree.root")
+            values.append(abbrev_home(root))
+            values.append(env.get_value("python.version"))
+            env_data.append(values)
+
+        column_widths = calculate_column_widths(env_data)
+
+        for i, d in enumerate(env_data):
+            print(make_line(d, column_widths, padding=padding))
+            if i == 0:
+                print(make_separator(column_widths, padding=padding))
 
     def sync(self):
         builder: PythonEnvBuilder = get_builder_class(config=self.config)

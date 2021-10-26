@@ -5,8 +5,8 @@ from typing import Optional, List, Tuple, Dict
 from pybm.config import PybmConfig
 from pybm.exceptions import GitError
 from pybm.logging import get_logger
-from pybm.mixins import SubprocessMixin
 from pybm.specs import Worktree
+from pybm.util.subprocess import run_subprocess
 from pybm.util.common import lmap, lfilter, version_string
 from pybm.util.git import disambiguate_info, get_git_version, resolve_ref, \
     is_main_worktree
@@ -52,12 +52,11 @@ _git_worktree_flags = {
 logger = get_logger(__name__)
 
 
-class GitWorktreeWrapper(SubprocessMixin):
+class GitWorktreeWrapper:
     """Wrapper class for a Git-based benchmark environment creator."""
 
     def __init__(self, config: PybmConfig):
         super().__init__()
-        self.ex_type = GitError
         self.command_db = _git_worktree_flags
         self.create_in_parent = config.get_value(
             "git.createWorktreeInParentDirectory")
@@ -88,7 +87,7 @@ class GitWorktreeWrapper(SubprocessMixin):
         self.feature_guard(command)
         logger.debug(
             "Running command \"{cmd}\".".format(cmd=" ".join(command)))
-        return self.run_subprocess(command=command)
+        return run_subprocess(command=command, ex_type=GitError)
 
     def get_worktree_by_attr(self, attr: str, value: str) \
             -> Optional[Worktree]:
