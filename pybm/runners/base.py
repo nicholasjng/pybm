@@ -33,6 +33,9 @@ class BenchmarkRunner:
             runner_util.load_context_providers(config.get_value(
                 "runner.contextProviders"))
 
+    def add_arguments(self):
+        raise NotImplementedError
+
     def check_required_packages(self, environment: BenchmarkEnvironment):
         missing_pkgs = []
         installed = environment.get_value("python.packages")

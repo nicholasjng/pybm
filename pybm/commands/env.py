@@ -1,5 +1,4 @@
 import argparse
-import sys
 from typing import List
 
 from pybm.builders.base import PythonEnvBuilder
@@ -85,22 +84,6 @@ class EnvCommand(CLICommand):
                                           "the path does not exist or is not "
                                           "recognized as a valid Python "
                                           "virtual environment.")
-            self.parser.add_argument("--python",
-                                     type=str,
-                                     default=sys.executable,
-                                     dest="python_executable",
-                                     help="Python interpreter to use in "
-                                          "virtual environment construction.",
-                                     metavar="<python>")
-            self.parser.add_argument("--venv-options",
-                                     nargs="*",
-                                     default=None,
-                                     help="Space-separated list of command "
-                                          "line options for virtual "
-                                          "environment creation using venv. "
-                                          "To get a comprehensive list of "
-                                          "options, run `python -m venv -h`.",
-                                     metavar="<venv-options>")
         elif subcommand == "delete":
             self.parser.add_argument("identifier",
                                      metavar="<identifier>",
@@ -178,6 +161,17 @@ class EnvCommand(CLICommand):
         elif subcommand == "update":
             pass
 
+        assert subcommand is not None, "no valid subcommand specified"
+        builder: PythonEnvBuilder = get_builder_class(config=self.config)
+        builder_name = self.config.get_value("builder.className")
+        builder_group_desc = f"Additional options from configured " \
+                             f"environment builder class " \
+                             f"{builder_name!r}"
+        builder_group = self.parser.add_argument_group(builder_group_desc)
+        # add builder-specific options into the group
+        for arg in builder.add_arguments(command=subcommand):
+            builder_group.add_argument(arg.pop("flags"), **arg)
+
     def create(self, options: argparse.Namespace, verbose: bool):
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
         env_store.create(options=options)
@@ -226,8 +220,7 @@ class EnvCommand(CLICommand):
         raise PybmError("env updating is not implemented yet.")
 
     def run(self, args: List[str]):
-        logger.debug("Running command: \"{cmd}\"".format(
-            cmd=self.format_call(args)))
+        logger.debug(f"Running command: `{self.format_call(args)}`")
 
         subcommand_handlers = {
             "create": self.create,

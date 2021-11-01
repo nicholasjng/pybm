@@ -38,33 +38,15 @@ class CompareCommand(CLICommand):
                                       "differences are reported. An error is "
                                       "raised if any of the given "
                                       "refs are not present in the run.")
-        self.parser.add_argument("--target-filter",
-                                 type=str,
-                                 default=None,
-                                 metavar="<regex>",
-                                 help="Regex filter to selectively report "
-                                      "benchmark target files. If specified, "
-                                      "only benchmark files matching the "
-                                      "given filter will be included "
-                                      "in the report.")
-        self.parser.add_argument("--benchmark-filter",
-                                 type=str,
-                                 default=None,
-                                 metavar="<regex>",
-                                 help="Regex filter to selectively report "
-                                      "benchmarks from the matched target "
-                                      "files. If specified, only benchmarks "
-                                      "matching the given filter will be "
-                                      "included in the report.")
-        self.parser.add_argument("--context-filter",
-                                 type=str,
-                                 default=None,
-                                 metavar="<regex>",
-                                 help="Regex filter for additional context to "
-                                      "report from the benchmarks. If "
-                                      "specified, only context values "
-                                      "matching the given context filter "
-                                      "will be included in the report.")
+
+        reporter: BenchmarkReporter = get_reporter_class(config=self.config)
+        reporter_name = self.config.get_value("reporter.className")
+        reporter_group_desc = f"Additional options from configured " \
+                              f"reporter class {reporter_name!r}"
+        reporter_group = self.parser.add_argument_group(reporter_group_desc)
+        # add builder-specific options into the group
+        for arg in reporter.add_arguments():
+            reporter_group.add_argument(arg.pop("flags"), **arg)
 
     def run(self, args: List[str]) -> int:
         if not args:

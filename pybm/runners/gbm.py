@@ -41,14 +41,17 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
                 f"Google Benchmark on any platform or Python "
                 f"interpreter outside this group, you will have "
                 f"to build the wheel from source. This requires "
-                f"Bazel; for information on Bazel installation, "
-                f"see "
+                f"Bazel; for information on Bazel installation, see "
                 f"https://docs.bazel.build/versions/4.2.1/install.html.")
         super().__init__(config=config)
         self.with_interleaving: bool = config.get_value(
             "runner.GoogleBenchmarkWithRandomInterleaving")
         self.aggregates_only: bool = config.get_value(
             "runner.GoogleBenchmarkSaveAggregatesOnly")
+
+    def add_arguments(self):
+        # TODO: Add GBM command line options
+        return []
 
     def create_flags(
             self,

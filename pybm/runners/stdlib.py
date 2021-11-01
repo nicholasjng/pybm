@@ -22,6 +22,9 @@ class TimeitRunner(BenchmarkRunner):
     def __init__(self, config: PybmConfig):
         super().__init__(config=config)
 
+    def add_arguments(self):
+        return []
+
     def parse_flags(self, flags: List[str]):
         prefix = self.prefix
         parser = argparse.ArgumentParser(prog=self.__class__.__name__,

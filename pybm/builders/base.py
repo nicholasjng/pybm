@@ -18,6 +18,9 @@ class PythonEnvBuilder:
         if wheel_cache_string != "":
             self.wheel_caches = wheel_cache_string.split(":")
 
+    def add_arguments(self, command: str):
+        raise NotImplementedError
+
     def create(self,
                executable: Union[str, Path],
                destination: Union[str, Path],
@@ -28,8 +31,8 @@ class PythonEnvBuilder:
     def delete(self, env_dir: Union[str, Path], verbose: bool = False) -> None:
         raise NotImplementedError
 
-    def link_existing(self, env_dir: Union[str, Path],
-                      verbose: bool = False) -> PythonSpec:
+    def link(self, env_dir: Union[str, Path], verbose: bool = False) \
+            -> PythonSpec:
         raise NotImplementedError
 
     def install_packages(self,

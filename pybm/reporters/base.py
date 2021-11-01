@@ -13,6 +13,9 @@ class BenchmarkReporter:
             "reporter.significantDigits"
         )
 
+    def add_arguments(self):
+        raise NotImplementedError
+
     def compare(self,
                 *refs: str,
                 result: Union[str, Path],

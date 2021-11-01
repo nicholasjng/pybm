@@ -8,7 +8,7 @@ from pybm.exceptions import PybmError, GitError
 from pybm.specs import Worktree
 from pybm.util.common import lfilter, dfilter, dkfilter, lmap
 from pybm.util.functions import is_context_provider
-from pybm.util.git import get_from_history, clean_worktree, has_untracked_files
+from pybm.util.git import get_from_history
 from pybm.util.imports import import_from_module
 from pybm.util.path import get_subdirs, list_contents
 from pybm.util.print import abbrev_home
@@ -47,7 +47,7 @@ def discover_targets(worktree: Worktree,
           f"{ref_type} {ref!r}.")
     try:
         if source_ref is not None:
-            if has_untracked_files(root):
+            if worktree.has_untracked_files():
                 raise PybmError("Sourcing benchmarks from other git "
                                 "reference requires a clean worktree, "
                                 "but there are "
@@ -91,7 +91,7 @@ def discover_targets(worktree: Worktree,
             # restore benchmark contents from original ref
             get_from_history(ref=ref, resource=source_path, directory=root)
             # revert checkout of untracked files with `git clean`
-            clean_worktree(directory=root)
+            worktree.clean()
             print(f"Finished benchmark run in worktree "
                   f"{abbrev_home(root)} on {ref_type} {ref!r}.")
 

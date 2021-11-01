@@ -52,7 +52,6 @@ def rescale(key: str, time_value: Tuple[float, float],
 
 def reduce(bm: Dict[str, List[Any]]) -> Dict[str, Any]:
     res: Dict[str, Any] = {}
-    # TODO: Enable user-defined reducers
     for k, v in bm.items():
         if isinstance(v[0], str):
             assert len(set(v)) == 1, \
@@ -220,6 +219,36 @@ class JSONConsoleReporter(BenchmarkReporter):
             res = f"{tval:.{digits}f} ± {std:.{digits}f}"
         return res
 
+    def add_arguments(self):
+        args = [{"flags": "--target-filter",
+                 "type": str,
+                 "default": None,
+                 "metavar": "<regex>",
+                 "help": "Regex filter to selectively report "
+                         "benchmark target files. If specified, "
+                         "only benchmark files matching the "
+                         "given filter will be included "
+                         "in the report."},
+                {"flags": "--benchmark-filter",
+                 "type": str,
+                 "default": None,
+                 "metavar": "<regex>",
+                 "help": "Regex filter to selectively "
+                         "report benchmarks from the matched target "
+                         "files. If specified, only benchmarks "
+                         "matching the given filter will be "
+                         "included in the report."},
+                {"flags": "--context-filter",
+                 "type": str,
+                 "default": None,
+                 "metavar": "<regex>",
+                 "help": "Regex filter for additional context "
+                         "to report from the benchmarks. If "
+                         "specified, only context values "
+                         "matching the given context filter "
+                         "will be included in the report."}]
+        return args
+
     def compare(self,
                 *refs: str,
                 result: Union[str, Path],
@@ -274,8 +303,9 @@ class JSONConsoleReporter(BenchmarkReporter):
              target_filter: Optional[str] = None) -> List[Dict[str, Any]]:
         path = Path(self.result_dir) / result / ref
         if not path.exists() or not path.is_dir():
-            raise PybmError(f"Given result path {result} does not exist, or "
-                            f"is not a directory.")
+            raise PybmError(
+                f"Given result path {result} does not exist, or "
+                f"is not a directory.")
         json_files = list_contents(path=path,
                                    file_suffix=".json",
                                    names_only=False)
@@ -293,7 +323,8 @@ class JSONConsoleReporter(BenchmarkReporter):
 
         header_widths = lmap(len, formatted_results[0].keys())
         data_widths = zip(header_widths,
-                          *(lmap(len, d.values()) for d in formatted_results))
+                          *(lmap(len, d.values()) for d in
+                            formatted_results))
         column_widths: List[int] = lmap(max, data_widths)
         padding = self.padding
         for i, res in enumerate(formatted_results):
