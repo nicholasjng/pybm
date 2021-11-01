@@ -1,14 +1,16 @@
 import os
-from typing import List, Iterable
+from pathlib import Path
+from typing import List, Iterable, Union
 
 from pybm.util.common import lmap
 
 
-def abbrev_home(path: str) -> str:
+def abbrev_home(path: Union[str, Path]) -> str:
+    str_path = str(path)
     home_dir = os.getenv("HOME")
-    if home_dir is not None and path.startswith(home_dir):
-        path = path.replace(home_dir, "~")
-    return path
+    if home_dir is not None and str_path.startswith(home_dir):
+        str_path = str_path.replace(home_dir, "~")
+    return str_path
 
 
 def calculate_column_widths(data: Iterable[Iterable[str]]) -> List[int]:

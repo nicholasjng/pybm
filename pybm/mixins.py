@@ -26,17 +26,15 @@ class StateMixin:
             else:
                 return default
 
-    def set_value(self, attr: str, value: Any, typecheck: bool = True):
+    def set_value(self, attr: str, value: Any):
         *subkeys, key = attr.split(".")
         obj = self
         for subkey in subkeys:
             obj = getattr(obj, subkey, None)
         if obj is None or not hasattr(obj, key):
-            # print("failed.")
             raise PybmError(f"Class {self.__class__.__name__!r} has no "
                             f"attribute {attr!r}.")
-        if typecheck:
-            value = self.canonicalize_type(obj, key, value)
+        value = self.canonicalize_type(obj, key, value)
         setattr(obj, key, value)
         return self
 
@@ -48,7 +46,6 @@ class StateMixin:
         try:
             if target_type != bool:
                 # int, float, str
-                # TODO: Maybe scrutinize string inputs for if they make sense?
                 return target_type(value)
             else:
                 # bool(s) is True for all strings except the empty string,
@@ -62,7 +59,6 @@ class StateMixin:
                     # do not allow shorthands, y/n, 1/0 etc.
                     raise ValueError
         except ValueError:
-            print("failed.")
             raise PybmError(f"Configuration value {attr!r} of class "
                             f"{obj.__class__.__name__} has to be of type "
                             f"{target_type.__name__!r}, but the given "
