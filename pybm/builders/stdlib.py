@@ -1,7 +1,9 @@
 """
 Virtual environment creation class for benchmarking
 with custom requirements in Python."""
+import contextlib
 import shutil
+import sys
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -11,7 +13,43 @@ from pybm.config import PybmConfig
 from pybm.exceptions import BuilderError
 from pybm.specs import PythonSpec
 from pybm.util.common import version_string
+from pybm.util.print import abbrev_home
 from pybm.util.subprocess import run_subprocess
+
+
+@contextlib.contextmanager
+def action_context(action: str, directory: Union[str, Path]):
+    try:
+        fmt_action = action.capitalize()
+        if fmt_action.endswith("e"):
+            fmt_action = fmt_action[:-1]
+        attr = "new" if action == "create" else "existing"
+        print(f"{fmt_action}ing {attr} virtual environment in "
+              f"location {abbrev_home(directory)}.....", end="")
+        yield
+        print("done.")
+        if not action.endswith("e"):
+            action += "e"
+        print(f"Successfully {action}d {attr} virtual environment in location "
+              f"{abbrev_home(directory)}.")
+    except BuilderError:
+        print("failed.")
+
+
+@contextlib.contextmanager
+def pip_context(action: str, packages: List[str], directory: Union[str, Path]):
+    try:
+        pkgs = ", ".join(packages)
+        mode = "into" if action == "install" else "from"
+        fmt_action = action.capitalize()
+        print(f"{fmt_action}ing packages {pkgs} {mode} virtual "
+              f"environment in location {directory}.....", end="")
+        yield
+        print("done.")
+        print(f"Successfully {action}ed packages {pkgs} {mode} virtual "
+              f"environment in location {directory}.")
+    except BuilderError:
+        print("failed.")
 
 
 class VenvBuilder(PythonEnvBuilder):
@@ -43,6 +81,74 @@ class VenvBuilder(PythonEnvBuilder):
             self.pip_uninstall_options = \
                 pip_uninstall_option_string.split(",")
 
+    def add_arguments(self, command: str):
+        if command == "create":
+            args = [{"flags": "--python",
+                     "type": str,
+                     "default": sys.executable,
+                     "dest": "python_executable",
+                     "help": "Python interpreter to use in "
+                             "virtual environment construction.",
+                     "metavar": "<python>"},
+                    {"flags": "--venv-options",
+                     "nargs": "*",
+                     "default": None,
+                     "help": "Space-separated list of command "
+                             "line options for virtual "
+                             "environment creation using venv. "
+                             "To get a comprehensive list of "
+                             "options, run `python -m venv -h`.",
+                     "metavar": "<options>"}]
+
+        elif command == "install":
+            args = [{"flags": "packages",
+                     "nargs": "*",
+                     "default": None,
+                     "metavar": "<packages>",
+                     "help": "Package dependencies to install "
+                             "into the new virtual environment "
+                             "using pip."},
+                    {"flags": "-r",
+                     "type": str,
+                     "default": None,
+                     "metavar": "<requirements>",
+                     "dest": "requirements_file",
+                     "help": "Requirements file for dependency "
+                             "installation in the newly created "
+                             "virtual environment."},
+                    {"flags": "--pip-options",
+                     "nargs": "*",
+                     "default": None,
+                     "help": "Space-separated list of command "
+                             "line options for dependency "
+                             "installation in the created"
+                             "virtual environment using "
+                             "`pip install`. To get a "
+                             "comprehensive list of options, "
+                             "run `python -m pip install -h`.",
+                     "metavar": "<options>"}]
+        elif command == "uninstall":
+            args = [{"flags": "packages",
+                     "nargs": "+",
+                     "metavar": "<packages>",
+                     "help": "Package dependencies to uninstall "
+                             "from the benchmarking environment "
+                             "using pip."},
+                    {"flags": "--pip-options",
+                     "nargs": "*",
+                     "default": None,
+                     "help": "Space-separated list of command "
+                             "line options for dependency "
+                             "removal in the benchmark "
+                             "environment using "
+                             "`pip uninstall`. To get a "
+                             "comprehensive list of options, "
+                             "run `python -m pip uninstall -h`.",
+                     "metavar": "<options>"}]
+        else:
+            args = []
+        return args
+
     def create(self,
                executable: Union[str, Path],
                destination: Union[str, Path],
@@ -64,10 +170,9 @@ class VenvBuilder(PythonEnvBuilder):
         options += self.venv_options
         # Prevent duplicate options
         command += list(set(options))
-        print(f"Creating virtual environment in directory {env_dir}.....",
-              end="")
-        run_subprocess(command)
-        print("done.")
+
+        with action_context("create", directory=env_dir):
+            run_subprocess(command)
 
         executable = builder_util.get_executable(env_dir)
         python_version = version_string(
@@ -87,37 +192,30 @@ class VenvBuilder(PythonEnvBuilder):
             raise BuilderError(f"Given directory {env_dir} was not recognized "
                                f"as a valid virtual environment.")
 
-        print(f"Removing virtual environment at location {env_dir}.....",
-              end="")
-        shutil.rmtree(env_dir)
-        print("done.")
+        with action_context("remove", directory=env_dir):
+            shutil.rmtree(env_dir)
 
-    def link_existing(self,
-                      env_dir: Union[str, Path],
-                      verbose: bool = False):
-        print(f"Attempting to link existing virtual environment in location "
-              f"{env_dir}.....")
-        # TODO: This discovery stuff should go into caller routine
-        if (Path(self.venv_home) / env_dir).exists():
-            path = Path(self.venv_home) / env_dir
-        else:
-            path = Path(env_dir)
-        if not builder_util.is_valid_venv(path, verbose=verbose):
-            msg = f"The specified path {env_dir} was not recognized " \
-                  f"as a valid virtual environment, since no `python`/" \
-                  f"`pip` executables or symlinks were discovered."
-            raise BuilderError(msg)
-        executable = builder_util.get_executable(env_dir)
-        python_version = version_string(
-            builder_util.get_python_version(executable))
-        packages = self.list_packages(executable, verbose=verbose)
-        spec = PythonSpec(root=str(env_dir),
-                          executable=executable,
-                          version=python_version,
-                          packages=packages)
-        print(f"Successfully linked existing virtual environment in location "
-              f"{env_dir}.")
-        return spec
+    def link(self, env_dir: Union[str, Path], verbose: bool = False):
+        with action_context("link", directory=env_dir):
+            # TODO: This discovery stuff should go into caller routine
+            if (Path(self.venv_home) / env_dir).exists():
+                path = Path(self.venv_home) / env_dir
+            else:
+                path = Path(env_dir)
+            if not builder_util.is_valid_venv(path, verbose=verbose):
+                msg = f"The specified path {env_dir} was not recognized " \
+                      f"as a valid virtual environment, since no `python`/" \
+                      f"`pip` executables or symlinks were discovered."
+                raise BuilderError(msg)
+            executable = builder_util.get_executable(env_dir)
+            python_version = version_string(
+                builder_util.get_python_version(executable))
+            packages = self.list_packages(executable, verbose=verbose)
+            spec = PythonSpec(root=str(env_dir),
+                              executable=executable,
+                              version=python_version,
+                              packages=packages)
+            return spec
 
     def install_packages(self,
                          spec: PythonSpec,
@@ -146,14 +244,10 @@ class VenvBuilder(PythonEnvBuilder):
         options += [f"--find-links={loc}" for loc in self.wheel_caches]
         command += list(set(options))
 
-        pkgs = ", ".join(packages)
-        print(f"Installing packages {pkgs} into virtual environment"
-              f" in location {spec.root}.....", end="")
-        run_subprocess(command)
+        with pip_context("install", packages, spec.root):
+            run_subprocess(command, ex_type=BuilderError)
+
         # this only runs if the subprocess succeeds
-        print("done.")
-        print(f"Successfully installed packages {pkgs} into virtual "
-              f"environment in location {spec.root}.")
         new_packages = self.list_packages(executable=executable)
         spec.update_packages(packages=new_packages)
 
@@ -168,14 +262,10 @@ class VenvBuilder(PythonEnvBuilder):
         command = [executable, "-m", "pip", "uninstall", *packages]
         command += list(set(options))
 
-        pkgs = ", ".join(packages)
-        print(f"Uninstalling packages {pkgs} from virtual environment"
-              f" in location {spec.root}.....", end="")
-        run_subprocess(command)
+        with pip_context("uninstall", packages, spec.root):
+            run_subprocess(command)
+
         # this only runs if the subprocess succeeds
-        print("done.")
-        print(f"Successfully uninstalled packages {pkgs} from virtual "
-              f"environment in location {spec.root}.")
         new_packages = self.list_packages(executable=executable)
         spec.update_packages(packages=new_packages)
 

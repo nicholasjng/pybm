@@ -89,6 +89,7 @@ class RunCommand(CLICommand):
                                  type=str,
                                  default=None,
                                  dest="benchmark_filter",
+                                 metavar="<regex>",
                                  help="Regex used to selectively run "
                                       "benchmarks inside the target files "
                                       "matching the given expression.")
@@ -112,6 +113,15 @@ class RunCommand(CLICommand):
                                       "use Python context providers instead "
                                       "by setting the runner.contextProviders "
                                       "config option.")
+
+        runner: BenchmarkRunner = get_runner_class(config=self.config)
+        runner_name = self.config.get_value("runner.className")
+        runner_group_desc = f"Additional options from configured " \
+                            f"reporter class {runner_name!r}"
+        runner_group = self.parser.add_argument_group(runner_group_desc)
+        # add builder-specific options into the group
+        for arg in runner.add_arguments():
+            runner_group.add_argument(arg.pop("flags"), **arg)
 
     def run(self, args: List[str]) -> int:
         if not args:
@@ -176,12 +186,12 @@ class RunCommand(CLICommand):
                 environment.worktree.switch(ref=env_id)
             else:
                 environment = env_store.get(env_id)
-
+            worktree = environment.worktree
             runner.check_required_packages(environment=environment)
             subdir = create_subdir(result_dir=result_dir,
-                                   worktree=environment.worktree)
+                                   worktree=worktree)
 
-            with discover_targets(worktree=environment.worktree,
+            with discover_targets(worktree=worktree,
                                   source_path=source_path,
                                   source_ref=source_ref) as benchmark_targets:
                 n = len(benchmark_targets)
