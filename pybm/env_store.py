@@ -9,12 +9,13 @@ import yaml
 
 from pybm import PybmConfig
 from pybm.builders.base import PythonEnvBuilder
+from pybm.builders.util import is_valid_venv
 from pybm.config import get_builder_class, get_runner_requirements
 from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.specs import Worktree, PythonSpec, BenchmarkEnvironment
 from pybm.util.common import lmap
-from pybm.util.git import disambiguate_info
+from pybm.util.git import disambiguate_info, is_main_worktree
 from pybm.util.print import abbrev_home, calculate_column_widths, make_line, \
     make_separator
 
@@ -25,7 +26,7 @@ def cleanup_venv(builder, worktree: Worktree, spec: PythonSpec):
     if Path(spec.root).parent == Path(worktree.root):
         builder.delete(spec.root)
     else:
-        print(f"Did not tear down linked venv with root {spec.root}")
+        print(f"Did not tear down linked venv with root {spec.root}.")
 
 
 def cleanup_worktree(git: GitWorktreeWrapper, worktree: Worktree):
@@ -102,7 +103,7 @@ class EnvironmentStore:
                     destination=Path(worktree.root) / "venv",
                     options=options.venv_options)
             else:
-                python_spec = builder.link_existing(options.link_dir)
+                python_spec = builder.link(options.link_dir)
 
             create_context.callback(cleanup_venv, builder, worktree,
                                     python_spec)
@@ -154,8 +155,7 @@ class EnvironmentStore:
             if venv_root.exists() and venv_root.parent == worktree_root:
                 builder.delete(venv_root)
 
-            git.remove_worktree(env_to_remove.get_value("worktree.root"),
-                                force=options.force)
+            git.remove_worktree(str(worktree_root), force=options.force)
 
             self.environments.remove(env_to_remove)
             print(f"Successfully removed benchmark environment "
@@ -217,22 +217,26 @@ class EnvironmentStore:
             sync.callback(self.save)
             for i, worktree in enumerate(git.list_worktrees()):
                 venv_root = Path(worktree.root) / "venv"
-                if venv_root.exists() and venv_root.is_dir():
-                    python_spec = builder.link_existing(venv_root,
-                                                        verbose=self.verbose)
+                if venv_root.exists() and is_valid_venv(venv_root,
+                                                        verbose=self.verbose):
+                    python_spec = builder.link(venv_root,
+                                               verbose=self.verbose)
                 else:
                     python_spec = builder.create(sys.executable, venv_root)
                     # TODO: Enable auto-grabbing from venv home
                 created = datetime.now().strftime(self.fmt)
 
-                # TODO: Assert that the main worktree is "root"
+                if is_main_worktree(worktree.root):
+                    name = "root"
+                else:
+                    name = f"env_{i + 1}"
                 env = BenchmarkEnvironment(
-                    name="root" if i == 0 else f"env_{i + 1}",
+                    name=name,
                     worktree=worktree,
                     python=python_spec,
                     created=created,
-                    last_modified=created
-                )
+                    last_modified=created)
+
                 self.environments.append(env)
 
     def update(self, name: str, attr: str, value: Any) -> None:

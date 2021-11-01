@@ -2,11 +2,12 @@ import logging
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any, Tuple
 
-from pybm.exceptions import PybmError
+from pybm.exceptions import PybmError, GitError
 from pybm.mixins import StateMixin
 from pybm.util.git import map_commits_to_tags, disambiguate_info, \
     resolve_commit, checkout
 from pybm.util.print import abbrev_home
+from pybm.util.subprocess import run_subprocess
 
 
 @dataclass(frozen=True)
@@ -40,13 +41,14 @@ class Worktree:
         return Worktree(root=root, branch=branch_id, commit=commit, tag=tag)
 
     def get_ref_and_type(self, bare: bool = False) -> Tuple[str, str]:
-        # either the branch OR tag are not None
+        def bare_ref(ref: str):
+            return ref.split("/", maxsplit=2)[-1]
+        # either the branch or tag are not None
         if self.branch is not None:
-            branch = self.branch.split("/", maxsplit=2)[-1] if bare else \
-                self.branch
+            branch = bare_ref(self.branch) if bare else self.branch
             return branch, "branch"
         elif self.tag is not None:
-            tag = self.tag.split("/", maxsplit=2)[-1] if bare else self.tag
+            tag = bare_ref(self.tag) if bare else self.tag
             return tag, "tag"
         else:
             return self.commit, "commit"
@@ -54,15 +56,27 @@ class Worktree:
     def switch(self, ref: str):
         ref_type = disambiguate_info(ref)
         if ref_type not in ["commit", "branch", "tag"]:
-            raise PybmError(f"Could not switch checkout of worktree "
-                            f"{self.root}: Object "
-                            f"{ref!r} could not be "
-                            f"understood as a valid git reference.")
+            raise PybmError(f"Failed to switch checkout of worktree "
+                            f"{abbrev_home(self.root)}: Object "
+                            f"{ref!r} could not be understood as a valid "
+                            f"git reference.")
         checkout(ref=ref, cwd=self.root)
         self.__setattr__(ref_type, ref)
         self.commit = resolve_commit(ref)
+        # TODO: Rename root after new ref
         print(f"Successfully checked out {ref_type} {ref!r} in worktree "
               f"{abbrev_home(self.root)}.")
+
+    def has_untracked_files(self):
+        """Check whether a git worktree has untracked files."""
+        command = ["git", "ls-files", "--others", "--exclude-standard"]
+        _, output = run_subprocess(command=command, ex_type=GitError,
+                                   cwd=self.root)
+        return output != ""
+
+    def clean(self):
+        command = ["git", "clean", "-fd"]
+        run_subprocess(command=command, cwd=self.root)
 
 
 @dataclass(unsafe_hash=True)

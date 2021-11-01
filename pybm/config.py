@@ -69,7 +69,7 @@ class PybmConfig(StateMixin):
         print(f"Describing configuration option {attr!r}.")
         print(f"Value type:    {value_type}")
         print(f"Current value: {current!r}")
-        print(description_db[group][name] or
+        print(description_db[group].get(name, "") or
               f"No description available for {group} attribute {name}.")
 
 
@@ -182,7 +182,7 @@ description_db: Dict[str, Descriptions] = {
                      "benchmarks inside Python virtual environments. If you "
                      "want to supply your own custom runner class, set this "
                      "value to point to your custom subclass of "
-                     "pybm.runners.BenchmarkRunner.",
+                     "pybm.runners.base.BenchmarkRunner.",
         "failFast": "",
         "numRepetitions": "",
         "contextProviders": "",

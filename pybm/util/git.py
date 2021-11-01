@@ -4,17 +4,53 @@ from pathlib import Path
 from typing import Tuple, Dict, Union, Optional
 
 from pybm.exceptions import GitError
-from pybm.util.common import lmap, lfilter, version_tuple
+from pybm.util.common import lmap, lfilter, version_tuple, version_string
 from pybm.util.subprocess import run_subprocess
 
 git_subprocess = partial(run_subprocess, ex_type=GitError)
+
+
+def get_git_version() -> Tuple[int, ...]:
+    rc, output = git_subprocess(["git", "--version"])
+    version_str = re.search(r'([\d.]+)', output)
+    if version_str is not None:
+        version = version_str.group()
+        return version_tuple(version)
+    else:
+        raise GitError("Unable to get version from git.")
+
+
+# ---------------------------------------
+# Current git version
+try:
+    GIT_VERSION = get_git_version()
+except GitError:
+    GIT_VERSION = (0, 0, 0)
+
+
+# ---------------------------------------
+
+def _feature_guard(min_git: Tuple[int, int, int]):
+    if GIT_VERSION < min_git:
+        min_git_str = version_string(min_git)
+        msg = f"Command `git restore` requires at minimum git version " \
+              f"{min_git_str}, "
+
+        if GIT_VERSION == (0, 0, 0):
+            msg += "but no git installation was found on your system. " \
+                   "Please assure that git is installed and added to PATH."
+        else:
+            curr_git_str = version_string(GIT_VERSION)
+            msg += f"but your installed git was found to be only version " \
+                   f"{curr_git_str}."
+        raise GitError(msg)
 
 
 def is_git_worktree(path: Union[str, Path]) -> bool:
     # https://stackoverflow.com/questions/2180270/check-if-current-directory-is-a-git-repository
     cmd = ["git", "rev-parse", "--is-inside-work-tree"]
     # command exits with 1 if not inside a worktree
-    rc, msg = git_subprocess(cmd, allowed_statuscodes=[1], cwd=path)
+    rc, _ = git_subprocess(cmd, allowed_statuscodes=[1], cwd=path)
     return rc == 0
 
 
@@ -70,8 +106,9 @@ def map_commits_to_tags() -> Dict[str, str]:
     tag_marker = "^{}"
     # show-ref exits with 1 if no tags exist in the repo
     rc, tags = git_subprocess(["git", "show-ref", "--tags", "-d"],
-                              errors="ignore")
-    commits_and_tags = lfilter(lambda x: x.endswith(tag_marker), tags)
+                              allowed_statuscodes=[1])
+    commits_and_tags = lfilter(lambda x: x.endswith(tag_marker),
+                               tags.splitlines())
     # closure above is required here to keep mypy happy
     split_list = lmap(process_line, commits_and_tags)
     return dict(split_list)
@@ -81,27 +118,6 @@ def list_local_branches():
     rc, branches = git_subprocess(["git", "branch"])
     # strip leading formatting tokens from git branch output
     return lmap(lambda x: x.lstrip(" *+"), branches.splitlines())
-
-
-def get_git_version() -> Tuple[int, ...]:
-    rc, output = git_subprocess(["git", "--version"])
-    version_string = re.search(r'([\d.]+)', output)
-    if version_string is not None:
-        version = version_string.group()
-        return version_tuple(version)
-    else:
-        raise GitError("Unable to get version from git.")
-
-
-# ---------------------------------------
-# Current git version
-try:
-    GIT_VERSION = get_git_version()
-except GitError:
-    GIT_VERSION = (0, 0, 0)
-
-
-# ---------------------------------------
 
 
 def resolve_commit(ref: str) -> str:
@@ -142,23 +158,6 @@ def get_from_history(ref: str, resource: Union[str, Path],
     # https://stackoverflow.com/questions/307579/how-do-i-copy-a-version-of-a-single-file-from-one-git-branch-to-another
     command = ["git", "restore", "--source", ref, str(resource)]
 
-    if GIT_VERSION < (2, 23, 0):
-        msg = "Command `git restore` requires at minimum git version 2.23, " \
-              "but your installed git was found to be only " \
-              "{maj}.{min}".format(maj=GIT_VERSION[0], min=GIT_VERSION[1])
-        raise GitError(msg)
-
+    _feature_guard(min_git=(2, 23, 0))
     # errors caught here (e.g. nonexistent resource) are immediately raised
-    git_subprocess(command=command, cwd=directory, errors="ignore")
-
-
-def has_untracked_files(directory: Union[str, Path]):
-    """Check whether a git worktree has untracked files."""
-    command = ["git", "ls-files", "--others", "--exclude-standard"]
-    _, output = run_subprocess(command=command, cwd=directory)
-    return output == ""
-
-
-def clean_worktree(directory: Union[str, Path]):
-    command = ["git", "clean", "-fd"]
-    run_subprocess(command=command, cwd=directory)
+    git_subprocess(command=command, cwd=directory)
