@@ -1,13 +1,15 @@
 import re
 from functools import partial
 from pathlib import Path
-from typing import Tuple, Dict, Union, Optional
+from typing import Tuple, Dict, Union, Optional, Literal
 
 from pybm.exceptions import GitError
 from pybm.util.common import lmap, lfilter, version_tuple, version_string
 from pybm.util.subprocess import run_subprocess
 
 git_subprocess = partial(run_subprocess, ex_type=GitError)
+
+BranchMode = Literal["local", "remote", "all"]
 
 
 def get_git_version() -> Tuple[int, ...]:
@@ -76,8 +78,7 @@ def resolve_ref(commit_ish: str, resolve_commits: bool):
     ref = commit_ish
     if commit_ish in list_tags():
         ref_type = "tag"
-    # TODO: Make a worktree from a remote branch (does not appear here)
-    elif commit_ish in list_local_branches():
+    elif commit_ish in list_branches(mode="all"):
         # ref is a local branch name
         ref_type = "branch"
     elif is_valid_sha1_part(commit_ish):
@@ -106,6 +107,7 @@ def map_commits_to_tags() -> Dict[str, str]:
     # https://stackoverflow.com/questions/8796522/git-tag-list-display-commit-sha1-hashes
     def process_line(line: str) -> Tuple[str, str]:
         commit, tag = line.rstrip(tag_marker).split()
+        tag = tag.replace("refs/tags/", "")
         return commit, tag
 
     tag_marker = "^{}"
@@ -119,10 +121,26 @@ def map_commits_to_tags() -> Dict[str, str]:
     return dict(split_list)
 
 
-def list_local_branches():
-    rc, branches = git_subprocess(["git", "branch"])
+def list_branches(mode: BranchMode = "all"):
+    def format_branch(name: str):
+        name = name.lstrip(" *+")
+        return name.split("/", maxsplit=2)[-1]
+
+    command = ["git", "branch"]
+    if mode == "all":
+        command += ["-a"]
+    elif mode == "remote":
+        # TODO: Select remote out of multiple
+        command += ["-r"]
+
+    rc, output = git_subprocess(command)
+    branches = output.splitlines()
+
+    if mode != "local":
+        # filter remote HEAD tracker from output
+        branches = lfilter(lambda x: "->" not in x, branches)
     # strip leading formatting tokens from git branch output
-    return lmap(lambda x: x.lstrip(" *+"), branches.splitlines())
+    return lmap(format_branch, branches)
 
 
 def resolve_commit(ref: str) -> str:
@@ -144,7 +162,7 @@ def disambiguate_info(info: str) -> Optional[str]:
         attr = "root"
     elif is_valid_sha1_part(info):
         attr = "commit"
-    elif info in list_local_branches():
+    elif info in list_branches(mode="all"):
         attr = "branch"
     elif info in list_tags():
         attr = "tag"

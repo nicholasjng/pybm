@@ -61,7 +61,7 @@ class BenchmarkRunner:
         benchmark_context: Optional[List[str]] = None,
     ) -> List[str]:
         flags, prefix = [], self.prefix
-        ref, _ = environment.worktree.get_ref_and_type(bare=True)
+        ref, _ = environment.worktree.get_ref_and_type()
 
         if benchmark_context is None:
             benchmark_context = []

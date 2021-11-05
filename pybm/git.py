@@ -276,7 +276,7 @@ class GitWorktreeWrapper:
         return self.get_worktree_by_attr("root", destination)
 
     def move(self, worktree: Worktree, new_path: Union[str, Path]):
-        ref, ref_type = worktree.get_ref_and_type(bare=True)
+        ref, ref_type = worktree.get_ref_and_type()
         root = worktree.root
 
         with git_worktree_context("move", ref, ref_type, root):
@@ -316,14 +316,14 @@ class GitWorktreeWrapper:
         return worktree
 
     def repair(self, worktree: Worktree):
-        ref, ref_type = worktree.get_ref_and_type(bare=True)
+        ref, ref_type = worktree.get_ref_and_type()
         root = worktree.root
 
         with git_worktree_context("repair", ref, ref_type, root):
             self.run_command("repair", root)
 
     def switch(self, worktree: Worktree, ref: str, ref_type: Optional[str] = None):
-        old_ref, old_type = worktree.get_ref_and_type(bare=True)
+        old_ref, old_type = worktree.get_ref_and_type()
 
         if not ref_type:
             ref_type = disambiguate_info(ref)

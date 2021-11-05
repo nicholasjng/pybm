@@ -30,7 +30,7 @@ def create_rundir(result_dir: Union[str, Path]) -> Path:
 
 
 def create_subdir(result_dir: Union[str, Path], worktree: Worktree) -> Path:
-    ref, ref_type = worktree.get_ref_and_type(bare=True)
+    ref, ref_type = worktree.get_ref_and_type()
 
     if ref_type in ["branch", "tag"]:
         ref = ref.replace("/", "-")
@@ -46,7 +46,7 @@ def discover_targets(
     worktree: Worktree, source_path: Union[str, Path], source_ref: Optional[str] = None
 ):
     root = worktree.root
-    ref, ref_type = worktree.get_ref_and_type(bare=True)
+    ref, ref_type = worktree.get_ref_and_type()
 
     # boolean flag indicating checkout
     checkout_complete = False
@@ -81,7 +81,7 @@ def discover_targets(
 
         print(
             f"Discovering benchmark targets for {ref_type} {ref!r} "
-            f"in worktree {abbrev_home(root)!r} .....",
+            f"in worktree {abbrev_home(root)!r}.....",
             end="",
         )
 

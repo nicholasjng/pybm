@@ -34,23 +34,25 @@ class Worktree:
 
     @classmethod
     def from_list(cls, wt_info: List[str]):
-        root, commit, branch = wt_info
-        branch_id = branch if branch != "detached" else None
+        root, commit, branch_name = wt_info
+
+        if branch_name == "detached":
+            branch = None
+        else:
+            branch = branch_name.replace("refs/heads/", "")
+
         commit_tag_mapping = map_commits_to_tags()
+
         tag = commit_tag_mapping.get(commit, None)
-        return Worktree(root=root, branch=branch_id, commit=commit, tag=tag)
 
-    def get_ref_and_type(self, bare: bool = False) -> Tuple[str, str]:
-        def bare_ref(ref: str):
-            return ref.split("/", maxsplit=2)[-1]
+        return Worktree(root=root, branch=branch, commit=commit, tag=tag)
 
+    def get_ref_and_type(self) -> Tuple[str, str]:
         # either the branch or tag are not None
         if self.branch is not None:
-            branch = bare_ref(self.branch) if bare else self.branch
-            return branch, "branch"
+            return self.branch, "branch"
         elif self.tag is not None:
-            tag = bare_ref(self.tag) if bare else self.tag
-            return tag, "tag"
+            return self.tag, "tag"
         else:
             return self.commit, "commit"
 

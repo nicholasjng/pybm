@@ -68,7 +68,7 @@ def is_valid_venv(path: Union[str, Path], verbose: bool = False) -> bool:
             end="",
         )
 
-    actual_set = set(list_contents(bin_dir))
+    actual_set = set(list_contents(bin_dir, names_only=True))
 
     if not exec_set <= actual_set:
         if verbose:
