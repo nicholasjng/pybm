@@ -43,7 +43,7 @@ jobs:
 
       - name: Run sum example test
         run: |
-          python -m pip install .
+          pip install -e .
           pybm init
           pybm run -m benchmarks master linear-time constant-time --checkouts
           pybm compare latest master linear-time constant-time
