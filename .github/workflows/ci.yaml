@@ -12,11 +12,39 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
+      - name: Check out pybm
         uses: actions/checkout@v2
+
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
           python-version: 3.9
+
       - name: Run pre-commit hooks
         uses: pre-commit/action@v2.0.3
+
+  example-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pybm
+        uses: actions/checkout@v2
+
+      - name: Check out example
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          repository: nicholasjng/pybm-sum-example
+          path: sum-example
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Run sum example test
+        run: |
+          python -m pip install .
+          pybm init
+          pybm run -m benchmarks master linear-time constant-time --checkouts
+          pybm compare latest master linear-time constant-time
+        working-directory: sum-example
