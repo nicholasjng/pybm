@@ -25,19 +25,18 @@ def parse_args(args: List[str]) -> Tuple[str, List[str]]:
 
         # not args == False <=> len(args) > 0
         opt = args[0]
+
         if not opt.startswith(cmd_prefix):
             return opt, []
         else:
             return "base", args
     else:
-        # TODO: Think about how to extend this eventually to subcommands
         command_name, *command_args = args
 
         return command_name, command_args
 
 
 def parse_command(command_name: str) -> CLICommand:
-    # unknown command
     if command_name not in command_db:
         # TODO: Print similar commands if any, or print options
         raise CommandError(f"Unknown command {command_name}")

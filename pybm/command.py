@@ -9,6 +9,7 @@ from pybm.status_codes import ERROR
 
 class CLICommand:
     """CLI command base class."""
+
     usage = ""
 
     def __init__(self, name: str, **parser_kwargs):
@@ -20,20 +21,26 @@ class CLICommand:
             usage=self.usage,
             description=self.__doc__,
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            **parser_kwargs
+            **parser_kwargs,
         )
-        self.parser.add_argument(self.parser.prefix_chars + 'h',
-                                 self.parser.prefix_chars * 2 + "help",
-                                 action='help',
-                                 default=argparse.SUPPRESS,
-                                 help='Show this message and exit.')
-        self.parser.add_argument(self.parser.prefix_chars + "v",
-                                 action="store_true",
-                                 default=False,
-                                 dest="verbose",
-                                 help="Enable verbose mode. Makes pybm "
-                                      "log information that might be useful "
-                                      "for debugging.")
+
+        self.parser.add_argument(
+            self.parser.prefix_chars + "h",
+            self.parser.prefix_chars * 2 + "help",
+            action="help",
+            default=argparse.SUPPRESS,
+            help="Show this message and exit.",
+        )
+
+        self.parser.add_argument(
+            self.parser.prefix_chars + "v",
+            action="store_true",
+            default=False,
+            dest="verbose",
+            help="Enable verbose mode. Makes pybm "
+            "log information that might be useful "
+            "for debugging.",
+        )
 
     def add_arguments(self):
         """Add arguments to class argument parser member."""
@@ -48,11 +55,7 @@ class CLICommand:
     def run_wrapped(self, args: List[str]):
         try:
             return self.run(args)
-        except (
-                PybmError,
-                GitError,
-                BuilderError,
-        ) as e:
+        except (PybmError, GitError, BuilderError) as e:
             sys.stderr.write(f"Error: {e}")
             sys.stderr.write(os.linesep)
             sys.exit(ERROR)
