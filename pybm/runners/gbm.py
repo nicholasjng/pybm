@@ -42,41 +42,52 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
                 f"interpreter outside this group, you will have "
                 f"to build the wheel from source. This requires "
                 f"Bazel; for information on Bazel installation, see "
-                f"https://docs.bazel.build/versions/4.2.1/install.html.")
+                f"https://docs.bazel.build/versions/4.2.1/install.html."
+            )
+
         super().__init__(config=config)
+
         self.with_interleaving: bool = config.get_value(
-            "runner.GoogleBenchmarkWithRandomInterleaving")
+            "runner.GoogleBenchmarkWithRandomInterleaving"
+        )
+
         self.aggregates_only: bool = config.get_value(
-            "runner.GoogleBenchmarkSaveAggregatesOnly")
+            "runner.GoogleBenchmarkSaveAggregatesOnly"
+        )
 
     def add_arguments(self):
         # TODO: Add GBM command line options
         return []
 
     def create_flags(
-            self,
-            environment: BenchmarkEnvironment,
-            num_repetitions: int = 1,
-            benchmark_filter: Optional[str] = None,
-            benchmark_context: Optional[List[str]] = None) -> List[str]:
+        self,
+        environment: BenchmarkEnvironment,
+        repetitions: int = 1,
+        benchmark_filter: Optional[str] = None,
+        benchmark_context: Optional[List[str]] = None,
+    ) -> List[str]:
+
         flags = super(GoogleBenchmarkRunner, self).create_flags(
             environment=environment,
-            num_repetitions=num_repetitions,
+            repetitions=repetitions,
             benchmark_filter=benchmark_filter,
-            benchmark_context=benchmark_context
+            benchmark_context=benchmark_context,
         )
+
         # JSON is the only supported output file format in GBM
         flags += [f"{self.prefix}_format=json"]
+
         if self.with_interleaving:
             flags.append("--benchmark_enable_random_interleaving=true")
+
         if self.aggregates_only:
             flags.append("--benchmark_report_aggregates_only")
+
         return flags
 
-    def run_benchmark(self,
-                      argv: List[str] = None,
-                      context: Dict[str, Any] = None) -> int:
-
+    def run_benchmark(
+        self, argv: List[str] = None, context: Dict[str, Any] = None
+    ) -> int:
         def flags_parser(argv: List[str]):
             argv = gbm.initialize(argv)
             return app.parse_flags_with_usage(argv)
@@ -85,10 +96,12 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
             return gbm.run_benchmarks()
 
         argv = argv or sys.argv
+
         # inject environment-specific context into args
         argv += self.get_current_context()
-        runtime_context = lfilter(lambda x: x.startswith(
-            "--benchmark_context"), argv)
+
+        runtime_context = lfilter(lambda x: x.startswith("--benchmark_context"), argv)
+
         runner_util.validate_context(runtime_context, parsed=True)
 
         return app.run(run_benchmarks, argv=argv, flags_parser=flags_parser)
