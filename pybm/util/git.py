@@ -12,7 +12,7 @@ git_subprocess = partial(run_subprocess, ex_type=GitError)
 
 def get_git_version() -> Tuple[int, ...]:
     rc, output = git_subprocess(["git", "--version"])
-    version_str = re.search(r'([\d.]+)', output)
+    version_str = re.search(r"([\d.]+)", output)
     if version_str is not None:
         version = version_str.group()
         return version_tuple(version)
@@ -30,19 +30,22 @@ except GitError:
 
 # ---------------------------------------
 
+
 def _feature_guard(min_git: Tuple[int, int, int]):
     if GIT_VERSION < min_git:
         min_git_str = version_string(min_git)
-        msg = f"Command `git restore` requires at minimum git version " \
-              f"{min_git_str}, "
+        msg = f"Command `git restore` requires at minimum git version {min_git_str}, "
 
         if GIT_VERSION == (0, 0, 0):
-            msg += "but no git installation was found on your system. " \
-                   "Please assure that git is installed and added to PATH."
+            msg += (
+                "but no git installation was found on your system. "
+                "Please assure that git is installed and added to PATH."
+            )
         else:
             curr_git_str = version_string(GIT_VERSION)
-            msg += f"but your installed git was found to be only version " \
-                   f"{curr_git_str}."
+            msg += (
+                f"but your installed git was found to be only version {curr_git_str}."
+            )
         raise GitError(msg)
 
 
@@ -80,8 +83,10 @@ def resolve_ref(commit_ish: str, resolve_commits: bool):
     elif is_valid_sha1_part(commit_ish):
         ref_type = "commit"
     else:
-        msg = f"Input {commit_ish!r} did not resolve to any known local " \
-              f"branch, tag or valid commit SHA1."
+        msg = (
+            f"Input {commit_ish!r} did not resolve to any known local "
+            f"branch, tag or valid commit SHA1."
+        )
         raise GitError(msg)
     # force commit resolution, leads to detached HEAD
     if resolve_commits:
@@ -105,10 +110,10 @@ def map_commits_to_tags() -> Dict[str, str]:
 
     tag_marker = "^{}"
     # show-ref exits with 1 if no tags exist in the repo
-    rc, tags = git_subprocess(["git", "show-ref", "--tags", "-d"],
-                              allowed_statuscodes=[1])
-    commits_and_tags = lfilter(lambda x: x.endswith(tag_marker),
-                               tags.splitlines())
+    rc, tags = git_subprocess(
+        ["git", "show-ref", "--tags", "-d"], allowed_statuscodes=[1]
+    )
+    commits_and_tags = lfilter(lambda x: x.endswith(tag_marker), tags.splitlines())
     # closure above is required here to keep mypy happy
     split_list = lmap(process_line, commits_and_tags)
     return dict(split_list)
@@ -151,8 +156,7 @@ def checkout(ref: str, cwd: Union[str, Path]):
     git_subprocess(command=command, cwd=cwd)
 
 
-def get_from_history(ref: str, resource: Union[str, Path],
-                     directory: Union[str, Path]):
+def get_from_history(ref: str, resource: Union[str, Path], directory: Union[str, Path]):
     """Check out a file or directory from another git reference."""
     # Source:
     # https://stackoverflow.com/questions/307579/how-do-i-copy-a-version-of-a-single-file-from-one-git-branch-to-another

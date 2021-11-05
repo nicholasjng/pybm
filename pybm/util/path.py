@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, List
+from typing import Union, List, Optional
 
 from pybm.util.common import lmap
 
@@ -14,11 +14,23 @@ def get_subdirs(path: Union[str, Path]):
     return [f.stem for f in filter(Path.is_dir, p.iterdir())]
 
 
-def list_contents(path: Union[str, Path], file_suffix: str = "",
-                  names_only: bool = True) -> List[str]:
-    p = Path(path).resolve()
+def list_contents(
+    path: Union[str, Path],
+    file_suffix: str = "",
+    rel_path: Optional[str] = None,
+    names_only: bool = False,
+) -> List[str]:
+
+    resolved_path = Path(path).resolve()
+
     glob_pattern = "*" if file_suffix == "" else "*" + file_suffix
+    matching_files = resolved_path.glob(glob_pattern)
+
     if names_only:
-        return lmap(lambda x: str(x.name), p.glob(glob_pattern))
+        return lmap(lambda x: x.name, matching_files)
+    elif rel_path is not None:
+        return lmap(
+            lambda p: str(p.relative_to(rel_path)), matching_files  # type: ignore
+        )
     else:
-        return lmap(str, p.glob(glob_pattern))
+        return lmap(str, matching_files)

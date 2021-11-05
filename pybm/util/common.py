@@ -1,10 +1,10 @@
 import re
 from typing import List, Iterable, Tuple, Callable, TypeVar, Dict
 
-T = TypeVar('T')
-S = TypeVar('S')
-U = TypeVar('U')
-V = TypeVar('V')
+T = TypeVar("T")
+S = TypeVar("S")
+U = TypeVar("U")
+V = TypeVar("V")
 
 
 def lmap(fn: Callable[[S], T], iterable: Iterable[S]) -> List[T]:
@@ -23,8 +23,9 @@ def tfilter(fn: Callable[[S], bool], iterable: Iterable[S]) -> Tuple[S, ...]:
     return tuple(filter(fn, iterable))
 
 
-def lpartition(fn: Callable[[S], bool], iterable: Iterable[S]) -> \
-        Tuple[List[S], List[S]]:
+def lpartition(
+    fn: Callable[[S], bool], iterable: Iterable[S]
+) -> Tuple[List[S], List[S]]:
     """Partition list into two with a boolean function. Not particularly
     efficient because of the double pass, but fine for small lists."""
     true_list = lfilter(lambda x: fn(x), iterable)
@@ -32,8 +33,9 @@ def lpartition(fn: Callable[[S], bool], iterable: Iterable[S]) -> \
     return true_list, false_list
 
 
-def tpartition(fn: Callable[[S], bool], iterable: Iterable[S]) -> \
-        Tuple[Tuple[S, ...], Tuple[S, ...]]:
+def tpartition(
+    fn: Callable[[S], bool], iterable: Iterable[S]
+) -> Tuple[Tuple[S, ...], Tuple[S, ...]]:
     """Partition tuple into two with a boolean function. Not particularly
     efficient because of the double pass, but fine for small tuples."""
     true_list = tfilter(lambda x: fn(x), iterable)
@@ -49,8 +51,7 @@ def dvmap(fn: Callable[[U], T], dictionary: Dict[S, U]) -> Dict[S, T]:
     return {k: fn(v) for k, v in dictionary.items()}
 
 
-def dmap(fn: Callable[[S, T], Tuple[U, V]], dictionary: Dict[S, T]) \
-        -> Dict[U, V]:
+def dmap(fn: Callable[[S, T], Tuple[U, V]], dictionary: Dict[S, T]) -> Dict[U, V]:
     return {k: v for k, v in map(fn, dictionary.keys(), dictionary.values())}
 
 
@@ -58,8 +59,7 @@ def dkfilter(fn: Callable[[S], bool], dictionary: Dict[S, T]) -> Dict[S, T]:
     return {k: dictionary[k] for k in lfilter(fn, dictionary.keys())}
 
 
-def dfilter(fn: Callable[[Tuple[S, T]], bool], dictionary: Dict[S, T]) \
-        -> Dict[S, T]:
+def dfilter(fn: Callable[[Tuple[S, T]], bool], dictionary: Dict[S, T]) -> Dict[S, T]:
     return {k: v for k, v in tfilter(fn, dictionary.items())}
 
 
@@ -89,12 +89,12 @@ def flatten(t):
     return [item for sublist in t for item in sublist]
 
 
-def partition_n(n: int, fn: Callable[[T], int], listlike: Iterable[T]) \
-        -> List[List[T]]:
+def partition_n(n: int, fn: Callable[[T], int], listlike: Iterable[T]) -> List[List[T]]:
     return_obj: List[List[T]] = [[] for _ in range(n)]
     for elem in listlike:
         k = fn(elem)
-        assert 0 <= k < n, "partition function needs to return an integer " \
-                           "in the interval [0, {n})."
+        assert (
+            0 <= k < n
+        ), f"partition function needs to return an integer in the interval [0, {n})."
         return_obj[k].append(elem)
     return return_obj
