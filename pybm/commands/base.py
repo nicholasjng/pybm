@@ -16,6 +16,7 @@ class BaseCommand(CLICommand):
     report  - Report results of successful benchmarking runs.
     run     - Run specified benchmarks in different environments.
     """
+
     usage = "pybm <command> [<options>]"
 
     def __init__(self):
@@ -23,10 +24,12 @@ class BaseCommand(CLICommand):
 
     def add_arguments(self):
         # special version action and version kwarg
-        self.parser.add_argument("--version",
-                                 action="version",
-                                 help="Show pybm version and exit.",
-                                 version=f"%(prog)s version {__version__}")
+        self.parser.add_argument(
+            "--version",
+            action="version",
+            help="Show pybm version and exit.",
+            version=f"%(prog)s version {__version__}",
+        )
 
     def run(self, args: List[str]):
         self.add_arguments()

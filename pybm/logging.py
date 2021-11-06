@@ -5,7 +5,7 @@ import sys
 # import pybm
 
 FORMAT = "%(asctime)s — %(name)-12s — %(levelname)s — %(message)s"
-DATEFORMAT = '%d/%m/%Y %I:%M:%S %p'
+DATEFORMAT = "%d/%m/%Y %I:%M:%S %p"
 FORMATTER = logging.Formatter(fmt=FORMAT, datefmt=DATEFORMAT)
 LOGFILE = "logs/logs.txt"
 DEFAULT_LEVEL = logging.WARNING

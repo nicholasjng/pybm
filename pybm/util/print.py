@@ -18,15 +18,12 @@ def calculate_column_widths(data: Iterable[Iterable[str]]) -> List[int]:
     return lmap(max, data_lengths)
 
 
-def make_line(values: Iterable[str], column_widths: Iterable[int],
-              padding: int) -> str:
+def make_line(values: Iterable[str], column_widths: Iterable[int], padding: int) -> str:
     pad_char = " " * padding
     sep = "|".join([pad_char] * 2)
     offset = pad_char
 
-    line = offset + sep.join(
-        f"{n:<{w}}" for n, w in zip(values, column_widths)
-    )
+    line = offset + sep.join(f"{n:<{w}}" for n, w in zip(values, column_widths))
     return line
 
 

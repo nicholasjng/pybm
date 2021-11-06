@@ -36,33 +36,50 @@ def is_valid_venv(path: Union[str, Path], verbose: bool = False) -> bool:
     else:
         # TODO: Confirm the executable names on Windows
         exec_set, bin_folder = {"pip.exe", "python.exe"}, "Scripts"
+
     if verbose:
-        print(f"Matching subdirectories of {path} against default "
-              f"subdirectories of a virtual environment root.....",
-              end="")
+        print(
+            f"Matching subdirectories of {path} against default "
+            f"subdirectories of a virtual environment root.....",
+            end="",
+        )
+
     if bin_folder not in subdir_set:
         if verbose:
             print("failed.")
-            print(f"Expected to find a {bin_folder!r} directory "
-                  f"containing the executables, but the directory does "
-                  f"not exist.")
+            print(
+                f"Expected to find a {bin_folder!r} directory "
+                f"containing the executables, but the directory does "
+                f"not exist."
+            )
         return False
+
     if verbose:
         print("success.")
+
     bin_dir = Path(path) / bin_folder
+
     # at minimum, pip and python executables / symlinks are required
     # TODO: Assert they are executables or symlinks to executables
     if verbose:
-        print(f"Attempting to locate required executables in the "
-              f"executable subfolder {bin_dir}.....", end="")
-    actual_set = set(list_contents(bin_dir))
+        print(
+            f"Attempting to locate required executables in the "
+            f"executable subfolder {bin_dir}.....",
+            end="",
+        )
+
+    actual_set = set(list_contents(bin_dir, names_only=True))
+
     if not exec_set <= actual_set:
         if verbose:
             print("failed.")
             missing = ", ".join(exec_set - actual_set)
-            print("The following required executables could not be "
-                  f"located inside {bin_dir}: {missing}")
+            print(
+                "The following required executables could not be "
+                f"located inside {bin_dir}: {missing}"
+            )
         return False
+
     if verbose:
         print("successful.")
     return True

@@ -2,17 +2,16 @@ import logging
 from dataclasses import dataclass, field, asdict
 from typing import List, Optional, Dict, Any, Tuple
 
-from pybm.exceptions import PybmError, GitError
+from pybm.exceptions import GitError
 from pybm.mixins import StateMixin
-from pybm.util.git import map_commits_to_tags, disambiguate_info, \
-    resolve_commit, checkout
-from pybm.util.print import abbrev_home
+from pybm.util.git import map_commits_to_tags
 from pybm.util.subprocess import run_subprocess
 
 
 @dataclass(frozen=True)
 class PythonSpec:
     """Dataclass representing a Python virtual environment specification."""
+
     root: str = field()
     executable: str = field()
     version: str = field()
@@ -27,6 +26,7 @@ class PythonSpec:
 @dataclass
 class Worktree:
     """Dataclass representing a git worktree specification."""
+
     root: str
     commit: str
     branch: Optional[str]
@@ -34,44 +34,32 @@ class Worktree:
 
     @classmethod
     def from_list(cls, wt_info: List[str]):
-        root, commit, branch = wt_info
-        branch_id = branch if branch != "detached" else None
-        commit_tag_mapping = map_commits_to_tags()
-        tag = commit_tag_mapping.get(commit, None)
-        return Worktree(root=root, branch=branch_id, commit=commit, tag=tag)
+        root, commit, branch_name = wt_info
 
-    def get_ref_and_type(self, bare: bool = False) -> Tuple[str, str]:
-        def bare_ref(ref: str):
-            return ref.split("/", maxsplit=2)[-1]
+        if branch_name == "detached":
+            branch = None
+        else:
+            branch = branch_name.replace("refs/heads/", "")
+
+        commit_tag_mapping = map_commits_to_tags()
+
+        tag = commit_tag_mapping.get(commit, None)
+
+        return Worktree(root=root, branch=branch, commit=commit, tag=tag)
+
+    def get_ref_and_type(self) -> Tuple[str, str]:
         # either the branch or tag are not None
         if self.branch is not None:
-            branch = bare_ref(self.branch) if bare else self.branch
-            return branch, "branch"
+            return self.branch, "branch"
         elif self.tag is not None:
-            tag = bare_ref(self.tag) if bare else self.tag
-            return tag, "tag"
+            return self.tag, "tag"
         else:
             return self.commit, "commit"
-
-    def switch(self, ref: str):
-        ref_type = disambiguate_info(ref)
-        if ref_type not in ["commit", "branch", "tag"]:
-            raise PybmError(f"Failed to switch checkout of worktree "
-                            f"{abbrev_home(self.root)}: Object "
-                            f"{ref!r} could not be understood as a valid "
-                            f"git reference.")
-        checkout(ref=ref, cwd=self.root)
-        self.__setattr__(ref_type, ref)
-        self.commit = resolve_commit(ref)
-        # TODO: Rename root after new ref
-        print(f"Successfully checked out {ref_type} {ref!r} in worktree "
-              f"{abbrev_home(self.root)}.")
 
     def has_untracked_files(self):
         """Check whether a git worktree has untracked files."""
         command = ["git", "ls-files", "--others", "--exclude-standard"]
-        _, output = run_subprocess(command=command, ex_type=GitError,
-                                   cwd=self.root)
+        _, output = run_subprocess(command=command, ex_type=GitError, cwd=self.root)
         return output != ""
 
     def clean(self):
@@ -82,6 +70,7 @@ class Worktree:
 @dataclass(unsafe_hash=True)
 class BenchmarkEnvironment(StateMixin):
     """Dataclass representing a benchmarking environment configuration."""
+
     name: str
     worktree: Worktree
     python: PythonSpec
@@ -90,18 +79,22 @@ class BenchmarkEnvironment(StateMixin):
 
     @classmethod
     def from_dict(cls, spec: Dict[str, Any]):
-        return BenchmarkEnvironment(name=spec["name"],
-                                    worktree=Worktree(**spec["worktree"]),
-                                    python=PythonSpec(**spec["python"]),
-                                    created=spec["created"],
-                                    last_modified=spec["last_modified"])
+        return BenchmarkEnvironment(
+            name=spec["name"],
+            worktree=Worktree(**spec["worktree"]),
+            python=PythonSpec(**spec["python"]),
+            created=spec["created"],
+            last_modified=spec["last_modified"],
+        )
 
     def to_dict(self):
-        return {"name": self.name,
-                "worktree": asdict(self.worktree),
-                "python": asdict(self.python),
-                "created": self.created,
-                "last_modified": self.last_modified}
+        return {
+            "name": self.name,
+            "worktree": asdict(self.worktree),
+            "python": asdict(self.python),
+            "created": self.created,
+            "last_modified": self.last_modified,
+        }
 
 
 @dataclass
@@ -110,8 +103,7 @@ class CoreGroup:
     defaultLevel: int = logging.DEBUG
     envFile: str = ".pybm/envs.yaml"
     logFile: str = "logs/logs.txt"
-    loggingFormatter: str = "%(asctime)s — %(name)-12s " \
-                            "— %(levelname)s — %(message)s"
+    loggingFormatter: str = "%(asctime)s — %(name)-12s " "— %(levelname)s — %(message)s"
 
 
 @dataclass

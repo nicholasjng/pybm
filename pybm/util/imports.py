@@ -35,7 +35,8 @@ def import_module_from_source(source_path: Union[str, Path]) -> ModuleType:
         # return loaded module
         return sys.modules[py_name]
     spec: Optional[ModuleSpec] = importlib.util.spec_from_file_location(
-        py_name, source_path)
+        py_name, source_path
+    )
     if spec is not None:
         module = importlib.util.module_from_spec(spec)
         assert isinstance(spec.loader, Loader)
@@ -53,8 +54,9 @@ def import_func_from_source(source_path: str, fn_name: str) -> Callable:
         module = import_module_from_source(source_path)
         return getattr(module, fn_name)
     except (AttributeError, PybmError) as e:
-        raise PybmError(f"Failed to import function {fn_name} from source "
-                        f"file {source_path}.") from e
+        raise PybmError(
+            f"Failed to import function {fn_name!r} from source file {source_path}."
+        ) from e
 
 
 def import_from_module(identifier: str) -> Callable:
@@ -63,11 +65,13 @@ def import_from_module(identifier: str) -> Callable:
     *module_parts, name = identifier.split(".")
     module_name = ".".join(module_parts)
     if not module_exists(module_name):
-        raise PybmError(f"Module {module_name} does not exist in the current "
-                        f"Python environment.")
+        raise PybmError(
+            f"Module {module_name!r} does not exist in the current "
+            f"Python environment."
+        )
     module = importlib.import_module(module_name)
     if not hasattr(module, name):
-        raise PybmError(f"Module {module_name} has no member {name}.")
+        raise PybmError(f"Module {module_name!r} has no member {name!r}.")
     return getattr(module, name)
 
 
@@ -79,8 +83,7 @@ def import_function(name: str):
         pass
     try:
         source_path, fn_name = name.split(":")
-        func = import_func_from_source(source_path=source_path,
-                                       fn_name=fn_name)
+        func = import_func_from_source(source_path=source_path, fn_name=fn_name)
     except (PybmError, AttributeError):
         pass
     return func

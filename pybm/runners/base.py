@@ -29,9 +29,11 @@ class BenchmarkRunner:
         Path(self.result_dir).mkdir(parents=True, exist_ok=True)
 
         self.fail_fast: bool = config.get_value("runner.failFast")
-        self.context_providers: List[ContextProvider] = \
-            runner_util.load_context_providers(config.get_value(
-                "runner.contextProviders"))
+        self.context_providers: List[
+            ContextProvider
+        ] = runner_util.load_context_providers(
+            config.get_value("runner.contextProviders")
+        )
 
     def add_arguments(self):
         raise NotImplementedError
@@ -43,33 +45,37 @@ class BenchmarkRunner:
             if pkg not in installed:
                 missing_pkgs.append(pkg)
         if len(missing_pkgs) > 0:
-            raise PybmError(f"Required packages {', '.join(missing_pkgs)} "
-                            f"for runner {self.__class__.__name__} not "
-                            f"installed in environment {environment.name!r}. "
-                            f"To install them, run `pybm env install "
-                            f"{environment.name} {' '.join(missing_pkgs)}`.")
+            raise PybmError(
+                f"Required packages {', '.join(missing_pkgs)} "
+                f"for runner {self.__class__.__name__} not "
+                f"installed in environment {environment.name!r}. "
+                f"To install them, run `pybm env install "
+                f"{environment.name} {' '.join(missing_pkgs)}`."
+            )
 
     def create_flags(
-            self,
-            environment: BenchmarkEnvironment,
-            num_repetitions: int = 5,
-            benchmark_filter: Optional[str] = None,
-            benchmark_context: Optional[List[str]] = None) -> List[str]:
+        self,
+        environment: BenchmarkEnvironment,
+        repetitions: int = 1,
+        benchmark_filter: Optional[str] = None,
+        benchmark_context: Optional[List[str]] = None,
+    ) -> List[str]:
         flags, prefix = [], self.prefix
-        ref, _ = environment.worktree.get_ref_and_type(bare=True)
+        ref, _ = environment.worktree.get_ref_and_type()
 
         if benchmark_context is None:
             benchmark_context = []
         else:
             # prepend prefix for internal validation
-            benchmark_context = lmap(lambda x: self.prefix + "_context=" + x,
-                                     benchmark_context)
+            benchmark_context = lmap(
+                lambda x: prefix + "_context=" + x, benchmark_context
+            )
         # supply the ref by default.
         benchmark_context += [f"--benchmark_context=ref={ref}"]
         if benchmark_filter is not None:
             flags.append(f"{prefix}_filter={benchmark_filter}")
 
-        flags.append(f"{prefix}_repetitions={num_repetitions}")
+        flags.append(f"{prefix}_repetitions={repetitions}")
         # Add benchmark context information like shown in
         # https://github.com/google/benchmark/blob/main/docs/user_guide.md#extra-context
         runner_util.validate_context(benchmark_context)
@@ -78,22 +84,25 @@ class BenchmarkRunner:
 
     def get_current_context(self) -> List[str]:
         ctx_info = [
-            "--benchmark_context={0}={1}".format(*ctx()) for ctx in
-            self.context_providers]
+            "--benchmark_context={0}={1}".format(*ctx())
+            for ctx in self.context_providers
+        ]
         return ctx_info
 
     def dispatch(
-            self,
-            benchmark: str,
-            environment: BenchmarkEnvironment,
-            repetitions: int = 1,
-            run_as_module: bool = False,
-            benchmark_filter: Optional[str] = None,
-            benchmark_context: Optional[List[str]] = None) -> Tuple[int, str]:
+        self,
+        benchmark: str,
+        environment: BenchmarkEnvironment,
+        repetitions: int = 1,
+        run_as_module: bool = False,
+        benchmark_filter: Optional[str] = None,
+        benchmark_context: Optional[List[str]] = None,
+    ) -> Tuple[int, str]:
         """Runner class method responsible for dispatching a benchmark run
         in a single target file. A subprocess will be spawned executing the
         benchmark in the given environment."""
         python = environment.get_value("python.executable")
+        worktree_root = environment.get_value("worktree.root")
 
         if run_as_module:
             module_name = convert_to_module(benchmark)
@@ -103,13 +112,14 @@ class BenchmarkRunner:
 
         command += self.create_flags(
             environment=environment,
-            num_repetitions=repetitions,
+            repetitions=repetitions,
             benchmark_filter=benchmark_filter,
-            benchmark_context=benchmark_context)
+            benchmark_context=benchmark_context,
+        )
 
-        return run_subprocess(command, errors="ignore")
+        return run_subprocess(command, errors="ignore", cwd=worktree_root)
 
-    def run_benchmark(self,
-                      argv: List[str] = None,
-                      context: Dict[str, Any] = None) -> int:
+    def run_benchmark(
+        self, argv: List[str] = None, context: Dict[str, Any] = None
+    ) -> int:
         raise NotImplementedError
