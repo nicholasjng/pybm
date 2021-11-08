@@ -1,7 +1,9 @@
+from typing import List
+
 from setuptools import setup, find_packages
 
 
-def get_requirements() -> list[str]:
+def get_requirements() -> List[str]:
     with open("requirements.txt", "r") as f:
         return f.readlines()
 
@@ -12,7 +14,7 @@ def get_extras():
     extra_features = {
         "gbm": ["google_benchmark @ git+https://github.com/google/benchmark"]
     }
-    extra_features["all"] = sum(extra_features.values(), start=[])
+    extra_features["all"] = sum(extra_features.values(), [])
     return extra_features
 
 

@@ -133,7 +133,7 @@ class RunCommand(CLICommand):
         runner: BenchmarkRunner = get_runner_class(config=self.config)
 
         verbose: bool = options.verbose
-        env_ids: list[str] = options.environments or []
+        env_ids: List[str] = options.environments or []
         run_all: bool = options.run_all
         checkout_mode: bool = options.checkout
         source_ref: Optional[str] = options.benchmark_source
