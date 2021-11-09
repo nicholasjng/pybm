@@ -39,14 +39,13 @@ use of pip and git in the way above.
 ## Requirements
 
 The most central requirement to **pybm** is `git`, a version control system,
-which is responsible for building the benchmark environments correctly.
-Currently, at least `git version 2.17.0` (April 2018) is required for pybm to
-work correctly. To check your git version, you can run `git --version`, which
-should result in an output showing the version number, similar to the one seen
-above.
+which is responsible for building benchmark environments.
+Currently, at least `git version 2.23.0` (August 2019) is required for pybm to
+work correctly. To check your git version, run `git --version`, which
+should result in an output showing the version number, similar to the one above.
 
 On the Python side, in its most standard configuration, **pybm** works almost
-entirely within the Python standard library - only the `yaml` package is
+entirely within the Python standard library - only the `pyyaml` package is
 required for configuration management. Additional functionality is available via
 extras installation:
 
@@ -55,8 +54,8 @@ extras installation:
 python -m pip install git+https://github.com/nicholasjng/pybm[gbm]
 ```
 
-More functionality is planned for following releases of this project. Expect a
-tentative roadmap to arrive soon.
+More features are planned for following releases of this project. For current 
+feature requests and implementation status, check the Issues tab and milestones.
 
 ## Documentation and examples
 
@@ -71,14 +70,13 @@ has already been put to the test, you can expect some sharp edges when using it
 for your own benchmarking purposes.
 
 Functionality has so far been tested on Darwin ARM64 and macOS 11 (my
-development machine). While great care was exercised to exclusively use
-cross-platform Python APIs and thus make pybm as portable as possible, flawless
-execution on other platforms cannot be guaranteed at this time.
+development machine), and Ubuntu through GitHub Actions. While great care was 
+exercised to exclusively use cross-platform Python APIs and thus make pybm as 
+portable as possible, flawless execution on other platforms cannot be 
+guaranteed.
 
-Computers running Linux should be able to use pybm as well, barring some
-unforeseen platform implementation differences from macOS ARM. Only Windows will
-most likely not work out of the box (due to different command line calling
-conventions and executable names).
+Windows will most likely not work out of the box (due to different command line 
+calling conventions and executable names).
 
 ## Contributing to pybm
 
