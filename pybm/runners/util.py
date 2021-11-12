@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import List, Any, Dict, Union, Optional, Tuple
 
-from pybm.exceptions import PybmError, GitError
+from pybm.exceptions import PybmError
 from pybm.specs import Worktree
 from pybm.util.common import lfilter, dfilter, dkfilter, lmap
 from pybm.util.functions import is_context_provider
@@ -71,7 +71,7 @@ def discover_targets(
                 )
 
             print(
-                f"Checking out benchmark resource {source_path!r} from git "
+                f"Checking out benchmark resource {str(source_path)!r} from git "
                 f"reference {source_ref!r} into worktree {abbrev_home(root)!r}."
             )
 
@@ -109,9 +109,6 @@ def discover_targets(
 
         yield benchmark_targets
 
-    except GitError:
-        # Error in the benchmark or JSON writing
-        pass
     finally:
         if source_ref is not None and checkout_complete:
             # restore benchmark contents from original ref

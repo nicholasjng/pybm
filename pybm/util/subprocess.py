@@ -1,17 +1,21 @@
 import subprocess
+import typing
 from pathlib import Path
-from typing import List, Tuple, Union, Literal
-
+from typing import List, Tuple, Union
 from pybm.exceptions import PybmError
 
-Handling = Literal["raise", "ignore"]
+if typing.TYPE_CHECKING:
+    # Literal exists only from Python 3.8 onwards
+    # solution source:
+    # https://github.com/pypa/pip/blob/main/src/pip/_internal/utils/subprocess.py
+    from typing import Literal
 
 
 def run_subprocess(
     command: List[str],
     allowed_statuscodes: List[int] = None,
     ex_type: type = PybmError,
-    errors: Handling = "raise",
+    errors: 'Literal["raise", "ignore"]' = "raise",
     cwd: Union[str, Path] = None,
 ) -> Tuple[int, str]:
     full_command = " ".join(command)

@@ -372,7 +372,8 @@ class JSONConsoleReporter(BenchmarkReporter):
 
         if not path.exists() or not path.is_dir():
             raise PybmError(
-                f"Given result path {result!r} does not exist, or is not a directory."
+                f"Given result path {str(path)!r} does not exist, "
+                f"or is not a directory."
             )
 
         json_files = list_contents(path=path, file_suffix=".json")

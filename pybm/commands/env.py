@@ -103,23 +103,7 @@ class EnvCommand(CLICommand):
                 "recognized as a valid Python "
                 "virtual environment.",
             )
-        elif subcommand == "delete":
-            self.parser.add_argument(
-                "identifier",
-                metavar="<identifier>",
-                help="Information that uniquely "
-                "identifies the environment. "
-                "Can be name, checked out "
-                "commit/branch/tag name or "
-                "git worktree base directory.",
-            )
-            self.parser.add_argument(
-                "-f",
-                "--force",
-                action="store_true",
-                help="Force worktree removal, including untracked files and changes.",
-            )
-        elif subcommand == "install":
+        elif subcommand in ["delete", "install", "uninstall"]:
             self.parser.add_argument(
                 "identifier",
                 metavar="<id>",
@@ -129,65 +113,14 @@ class EnvCommand(CLICommand):
                 "commit/branch/tag name, "
                 "or worktree root directory.",
             )
-            self.parser.add_argument(
-                "packages",
-                nargs="*",
-                default=None,
-                metavar="<packages>",
-                help="Packages to install into the new virtual environment using pip.",
-            )
-            self.parser.add_argument(
-                "-r",
-                type=str,
-                default=None,
-                metavar="<requirements>",
-                dest="requirements_file",
-                help="Requirements file for dependency "
-                "installation in the newly created "
-                "virtual environment.",
-            )
-            self.parser.add_argument(
-                "--pip-options",
-                nargs="*",
-                default=None,
-                help="Space-separated list of command "
-                "line options for dependency "
-                "installation in the created"
-                "virtual environment using "
-                "`pip install`. To get a "
-                "comprehensive list of options, "
-                "run `python -m pip install -h`.",
-                metavar="<pip-options>",
-            )
-        elif subcommand == "uninstall":
-            self.parser.add_argument(
-                "identifier",
-                metavar="<id>",
-                help="Information that uniquely "
-                "identifies the environment. "
-                "Can be name, checked out "
-                "commit, branch name, directory, "
-                "or custom user-defined tags.",
-            )
-            self.parser.add_argument(
-                "packages",
-                nargs="+",
-                metavar="<packages>",
-                help="Packages to uninstall from the benchmark environment using pip.",
-            )
-            self.parser.add_argument(
-                "--pip-options",
-                nargs="*",
-                default=None,
-                help="Space-separated list of command "
-                "line options for dependency "
-                "removal in the benchmark "
-                "environment using "
-                "`pip uninstall`. To get a "
-                "comprehensive list of options, "
-                "run `python -m pip uninstall -h`.",
-                metavar="<pip-options>",
-            )
+            if subcommand == "delete":
+                self.parser.add_argument(
+                    "-f",
+                    "--force",
+                    action="store_true",
+                    help="Force worktree removal, "
+                    "including untracked files and changes.",
+                )
         elif subcommand == "list":
             pass
         elif subcommand == "update":

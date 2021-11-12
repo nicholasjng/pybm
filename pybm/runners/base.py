@@ -22,7 +22,7 @@ class BenchmarkRunner:
         self.prefix = "--benchmark"
 
         # required packages for the runner
-        self.required_packages: List[str] = []
+        self.required_packages: List[str] = ["pybm"]
 
         # result saving directory; create if non-existent
         self.result_dir: str = config.get_value("runner.resultDirectory")
@@ -40,10 +40,25 @@ class BenchmarkRunner:
 
     def check_required_packages(self, environment: BenchmarkEnvironment):
         missing_pkgs = []
+
         installed = environment.get_value("python.packages")
+        names_and_versions = dict(lmap(lambda x: x.split("=="), installed))
+
         for pkg in self.required_packages:
-            if pkg not in installed:
-                missing_pkgs.append(pkg)
+            if "==" not in pkg:
+                name, version = pkg, ""
+            else:
+                name, version = pkg.split("==")
+
+            if name not in names_and_versions:
+                if name == "pybm":
+                    missing_pkgs.append("git+https://github.com/nicholasjng/pybm")
+                else:
+                    missing_pkgs.append(pkg)
+            else:
+                if version != "" and names_and_versions[name] != version:
+                    missing_pkgs.append(pkg)
+
         if len(missing_pkgs) > 0:
             raise PybmError(
                 f"Required packages {', '.join(missing_pkgs)} "

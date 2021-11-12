@@ -63,8 +63,8 @@ class InitCommand(CLICommand):
         config_path = config_dir / "config.yaml"
 
         if options.remove_existing:
-            for p in list_contents(config_dir):
-                (config_dir / p).unlink(missing_ok=True)
+            for p in list_contents(config_dir, file_suffix=".yaml", names_only=True):
+                (config_dir / p).unlink()
 
         if config_path.exists():
             raise PybmError(

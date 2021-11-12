@@ -227,9 +227,10 @@ class EnvironmentStore:
 
         env_data = [column_names]
         for env in self.environments:
+            root: str = env.get_value("worktree.root")
+
             values = [env.get_value("name")]
             values.extend(env.worktree.get_ref_and_type())
-            root: str = env.get_value("worktree.root")
             values.append(abbrev_home(root))
             values.append(env.get_value("python.version"))
             env_data.append(values)
