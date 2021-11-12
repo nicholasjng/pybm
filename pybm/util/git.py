@@ -1,15 +1,20 @@
 import re
+import typing
 from functools import partial
 from pathlib import Path
-from typing import Tuple, Dict, Union, Optional, Literal
+from typing import Tuple, Dict, Union, Optional
+
+if typing.TYPE_CHECKING:
+    # Literal exists only from Python 3.8 onwards
+    # solution source:
+    # https://github.com/pypa/pip/blob/main/src/pip/_internal/utils/subprocess.py
+    from typing import Literal
 
 from pybm.exceptions import GitError
 from pybm.util.common import lmap, lfilter, version_tuple, version_string
 from pybm.util.subprocess import run_subprocess
 
 git_subprocess = partial(run_subprocess, ex_type=GitError)
-
-BranchMode = Literal["local", "remote", "all"]
 
 
 def get_git_version() -> Tuple[int, ...]:
@@ -121,7 +126,7 @@ def map_commits_to_tags() -> Dict[str, str]:
     return dict(split_list)
 
 
-def list_branches(mode: BranchMode = "all"):
+def list_branches(mode: 'Literal["local", "remote", "all"]' = "all"):
     def format_branch(name: str):
         name = name.lstrip(" *+")
         return name.split("/", maxsplit=2)[-1]

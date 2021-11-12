@@ -197,6 +197,8 @@ class RunCommand(CLICommand):
                 environment = env_store.get(env_id)
 
             worktree = environment.worktree
+            ref, ref_type = worktree.get_ref_and_type()
+
             subdir = create_subdir(result_dir=result_dir, worktree=worktree)
 
             runner.check_required_packages(environment=environment)
@@ -207,14 +209,14 @@ class RunCommand(CLICommand):
                 n = len(benchmark_targets)
                 if n > 0:
                     print(
-                        f"Found a total of {n} benchmark targets for "
-                        f"environment {environment.name!r}."
+                        f"Found a total of {n} benchmark targets for {ref_type} "
+                        f"{ref!r} in environment {environment.name!r}."
                     )
                 else:
                     msg = (
-                        f"Benchmark selector {source_path!r} did not "
-                        f"match any directory or Python files in "
-                        f"environment {environment.name!r}."
+                        f"Benchmark selector {str(source_path)!r} did not "
+                        f"match any directory or Python files for {ref_type} "
+                        f"{ref!r} in environment {environment.name!r}."
                     )
 
                     if runner.fail_fast:
