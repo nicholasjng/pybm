@@ -39,24 +39,47 @@ class InitCommand(CLICommand):
             help="Overwrite existing configuration.",
         )
 
+        self.parser.add_argument(
+            "-o",
+            "--override",
+            action="append",
+            dest="overrides",
+            help="Override a specific configuration setting with a custom value "
+            "for the new pybm configuration file. Supplied arguments need "
+            "to have the form 'key=value'. For a comprehensive list of "
+            "configuration options, run `pybm config list`.",
+        )
+
     def run(self, args: List[str]) -> int:
         self.add_arguments()
 
         options = self.parser.parse_args(args)
 
         verbose: bool = options.verbose
+        overrides: List[str] = options.overrides or []
 
         if verbose:
             print(f"Parsed command line options: {options}")
 
         if not is_main_worktree(Path.cwd()):
             raise PybmError(
-                "Cannot initialize Pybm here because the "
-                "current directory was not recognized "
-                "as a git repository."
+                "Cannot initialize pybm: current directory is not a git repository."
             )
 
         config = PybmConfig()
+
+        for override in overrides:
+            try:
+                attr, value = override.split("=", maxsplit=2)
+            except ValueError:
+                raise PybmError(
+                    "Config overrides need to be specified in the form 'attr=value'."
+                )
+
+            if verbose:
+                print(f"Overriding config option {attr!r} with value {value!r}.")
+
+            config.set_value(attr, value)
 
         config_dir = Path(options.config_dir)
         config_dir.mkdir(parents=True, exist_ok=True)
