@@ -9,7 +9,7 @@ from typing import Union, Optional, Any, Dict, List, Callable, Tuple
 
 from pybm import PybmConfig
 from pybm.exceptions import PybmError
-from pybm.reporters.base import BenchmarkReporter
+from pybm.reporters.base import BaseReporter
 from pybm.util.common import (
     flatten,
     lfilter,
@@ -151,7 +151,7 @@ def process_result(benchmark_obj: Dict[str, Any], target_time_unit: str):
 
 
 def filter_result(
-    res: Dict[str, Any], context_filter: str, benchmark_filter: str
+    res: Dict[str, Any], context_filter: Optional[str], benchmark_filter: Optional[str]
 ) -> Dict[str, Any]:
     protected_context = ["executable", "ref"]
 
@@ -161,6 +161,7 @@ def filter_result(
         for val in protected_context:
             if val in res:
                 filtered[val] = res[val]
+
         res["context"] = filtered
 
     if benchmark_filter is not None:
@@ -214,8 +215,6 @@ def reduce_results(results: List[Dict[str, Any]]):
     partitions = partition_n(len(names), lambda x: names.index(x["name"]), results)
 
     def group_partition(p: List[Dict[str, Any]]):
-        # this cannot be empty
-        assert len(p) > 0, "empty partition encountered"
         res = collections.defaultdict(list)
 
         for bm in p:
@@ -234,9 +233,9 @@ def reduce_results(results: List[Dict[str, Any]]):
     return reduced_results
 
 
-class JSONConsoleReporter(BenchmarkReporter):
+class ConsoleReporter(BaseReporter):
     def __init__(self, config: PybmConfig):
-        super(JSONConsoleReporter, self).__init__(config=config)
+        super(ConsoleReporter, self).__init__(config=config)
         self.padding = 1
         self.formatters: Dict[str, Callable] = {
             "time": self.format_time,
@@ -257,7 +256,7 @@ class JSONConsoleReporter(BenchmarkReporter):
 
         return res
 
-    def add_arguments(self):
+    def additional_arguments(self):
         args = [
             {
                 "flags": "--target-filter",

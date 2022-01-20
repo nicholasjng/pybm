@@ -6,7 +6,7 @@ from pybm.exceptions import BuilderError
 from pybm.specs import PythonSpec
 
 
-class PythonEnvBuilder:
+class BaseBuilder:
     """Base class for all Python virtual environment builders."""
 
     def __init__(self, config: PybmConfig):
@@ -14,11 +14,11 @@ class PythonEnvBuilder:
         self.ex_type = BuilderError
         self.wheel_caches = []
 
-        wheel_cache_string: str = config.get_value("builder.localWheelCaches")
-        if wheel_cache_string != "":
-            self.wheel_caches = wheel_cache_string.split(":")
+        wheel_cache_str: str = config.get_value("builder.wheelcaches")
+        if wheel_cache_str != "":
+            self.wheel_caches = wheel_cache_str.split(":")
 
-    def add_arguments(self, command: str):
+    def additional_arguments(self, command: str):
         raise NotImplementedError
 
     def create(
@@ -33,10 +33,7 @@ class PythonEnvBuilder:
     def delete(self, env_dir: Union[str, Path], verbose: bool = False) -> None:
         raise NotImplementedError
 
-    def link(self, env_dir: Union[str, Path], verbose: bool = False) -> PythonSpec:
-        raise NotImplementedError
-
-    def install_packages(
+    def install(
         self,
         spec: PythonSpec,
         packages: Optional[List[str]] = None,
@@ -46,14 +43,17 @@ class PythonEnvBuilder:
     ) -> None:
         raise NotImplementedError
 
-    def uninstall_packages(
+    def link(self, env_dir: Union[str, Path], verbose: bool = False) -> PythonSpec:
+        raise NotImplementedError
+
+    def list(self, executable: Union[str, Path], verbose: bool = False) -> List[str]:
+        raise NotImplementedError
+
+    def uninstall(
         self,
         spec: PythonSpec,
         packages: List[str],
         options: Optional[List[str]] = None,
         verbose: bool = False,
     ) -> None:
-        raise NotImplementedError
-
-    def list_packages(self, executable: Union[str, Path], verbose: bool = False):
         raise NotImplementedError

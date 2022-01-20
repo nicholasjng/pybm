@@ -1,6 +1,7 @@
 """
 Virtual environment creation class for benchmarking
-with custom requirements in Python."""
+with custom requirements in Python.
+"""
 import contextlib
 import shutil
 import sys
@@ -8,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 import pybm.builders.util as builder_util
-from pybm.builders.base import PythonEnvBuilder
+from pybm.builders.base import BaseBuilder
 from pybm.config import PybmConfig
 from pybm.exceptions import BuilderError
 from pybm.specs import PythonSpec
@@ -41,9 +42,9 @@ def action_context(action: str, directory: Union[str, Path]):
 @contextlib.contextmanager
 def pip_context(
     action: str,
-    packages: Optional[List[str]],
-    requirements_file: Optional[str],
     directory: Union[str, Path],
+    packages: Optional[List[str]] = None,
+    requirements_file: Optional[str] = None,
 ):
     try:
         if packages is None:
@@ -66,16 +67,16 @@ def pip_context(
         print("failed.")
 
 
-class VenvBuilder(PythonEnvBuilder):
+class VenvBuilder(BaseBuilder):
     """Python standard library virtual environment builder class."""
 
     def __init__(self, config: PybmConfig):
         super().__init__(config=config)
-        self.venv_home: str = config.get_value("builder.homeDirectory")
+        self.venv_home: str = config.get_value("builder.homedir")
 
         # persistent venv options
         self.venv_options: List[str] = []
-        venv_option_string: str = config.get_value("builder.persistentVenvOptions")
+        venv_option_string: str = config.get_value("builder.venvoptions")
 
         if venv_option_string != "":
             self.venv_options = venv_option_string.split(",")
@@ -83,9 +84,7 @@ class VenvBuilder(PythonEnvBuilder):
         # persistent pip install options
         self.pip_install_options: List[str] = []
 
-        pip_install_option_string: str = config.get_value(
-            "builder.persistentPipInstallOptions"
-        )
+        pip_install_option_string: str = config.get_value("builder.pipinstalloptions")
         if pip_install_option_string != "":
             self.pip_install_options = pip_install_option_string.split(",")
 
@@ -93,12 +92,12 @@ class VenvBuilder(PythonEnvBuilder):
         self.pip_uninstall_options: List[str] = []
 
         pip_uninstall_option_string: str = config.get_value(
-            "builder.persistentPipUninstallOptions"
+            "builder.pipuninstalloptions"
         )
         if pip_uninstall_option_string != "":
             self.pip_uninstall_options = pip_uninstall_option_string.split(",")
 
-    def add_arguments(self, command: str):
+    def additional_arguments(self, command: str):
         if command == "create":
             args = [
                 {
@@ -125,15 +124,6 @@ class VenvBuilder(PythonEnvBuilder):
 
         elif command == "install":
             args = [
-                {
-                    "flags": "packages",
-                    "nargs": "*",
-                    "default": None,
-                    "metavar": "<packages>",
-                    "help": "Package dependencies to install "
-                    "into the new virtual environment "
-                    "using pip.",
-                },
                 {
                     "flags": "-r",
                     "type": str,
@@ -165,8 +155,7 @@ class VenvBuilder(PythonEnvBuilder):
                     "nargs": "+",
                     "metavar": "<packages>",
                     "help": "Package dependencies to uninstall "
-                    "from the benchmarking environment "
-                    "using pip.",
+                    "from the benchmarking environment using pip.",
                 },
                 {
                     "flags": "--pip-options",
@@ -223,15 +212,15 @@ class VenvBuilder(PythonEnvBuilder):
             root=str(env_dir),
             executable=executable,
             version=python_version,
-            packages=self.list_packages(executable),
+            packages=self.list(executable),
         )
 
     def delete(self, env_dir: Union[str, Path], verbose: bool = False) -> None:
         path = Path(env_dir)
         if not path.exists() or not path.is_dir():
             raise BuilderError(
-                f"No virtual environment found at location"
-                f" {env_dir}: Location does not exist or is "
+                f"No virtual environment found at location "
+                f"{env_dir}: Location does not exist or is "
                 f"not a directory."
             )
         elif not builder_util.is_valid_venv(path):
@@ -243,34 +232,7 @@ class VenvBuilder(PythonEnvBuilder):
         with action_context("remove", directory=env_dir):
             shutil.rmtree(env_dir)
 
-    def link(self, env_dir: Union[str, Path], verbose: bool = False):
-        # TODO: This discovery stuff should go into caller routine
-        if (Path(self.venv_home) / env_dir).exists():
-            path = Path(self.venv_home) / env_dir
-        else:
-            path = Path(env_dir)
-        if not builder_util.is_valid_venv(path, verbose=verbose):
-            msg = (
-                f"The specified path {env_dir} was not recognized "
-                f"as a valid virtual environment, since no `python`/"
-                f"`pip` executables or symlinks were discovered."
-            )
-            raise BuilderError(msg)
-
-        with action_context("link", directory=env_dir):
-            executable = builder_util.get_executable(env_dir)
-            python_version = version_string(builder_util.get_python_version(executable))
-            packages = self.list_packages(executable, verbose=verbose)
-
-            spec = PythonSpec(
-                root=str(env_dir),
-                executable=executable,
-                version=python_version,
-                packages=packages,
-            )
-            return spec
-
-    def install_packages(
+    def install(
         self,
         spec: PythonSpec,
         packages: Optional[List[str]] = None,
@@ -305,13 +267,50 @@ class VenvBuilder(PythonEnvBuilder):
         options += [f"--find-links={loc}" for loc in self.wheel_caches]
         command += list(set(options))
 
-        with pip_context("install", packages, requirements_file, spec.root):
+        with pip_context("install", spec.root, packages, requirements_file):
             run_subprocess(command, ex_type=BuilderError)
 
-        new_packages = self.list_packages(executable=executable)
+        new_packages = self.list(executable=executable)
         spec.update_packages(packages=new_packages)
 
-    def uninstall_packages(
+    def link(self, env_dir: Union[str, Path], verbose: bool = False):
+        # TODO: This discovery stuff should go into caller routine
+        if (Path(self.venv_home) / env_dir).exists():
+            path = Path(self.venv_home) / env_dir
+        else:
+            path = Path(env_dir)
+        if not builder_util.is_valid_venv(path, verbose=verbose):
+            msg = (
+                f"The specified path {env_dir} was not recognized "
+                f"as a valid virtual environment, since no `python`/"
+                f"`pip` executables or symlinks were discovered."
+            )
+            raise BuilderError(msg)
+
+        with action_context("link", directory=env_dir):
+            executable = builder_util.get_executable(env_dir)
+            python_version = version_string(builder_util.get_python_version(executable))
+            packages = self.list(executable, verbose=verbose)
+
+            spec = PythonSpec(
+                root=str(env_dir),
+                executable=executable,
+                version=python_version,
+                packages=packages,
+            )
+            return spec
+
+    def list(self, executable: Union[str, Path], verbose: bool = False) -> List[str]:
+        command = [str(executable), "-m", "pip", "list", "--format=freeze"]
+        # `pip list` output: table header, separator, package list
+        # _, packages = flat_pkg_table[0], flat_pkg_table[2:]
+        # return lmap(lambda x: "==".join(x.split()[:2]), packages)
+
+        rc, pip_output = run_subprocess(command)
+
+        return pip_output.splitlines()
+
+    def uninstall(
         self,
         spec: PythonSpec,
         packages: List[str],
@@ -327,26 +326,8 @@ class VenvBuilder(PythonEnvBuilder):
         command = [executable, "-m", "pip", "uninstall", "-y", *packages]
         command += list(set(options))
 
-        with pip_context("uninstall", packages, None, spec.root):
+        with pip_context("uninstall", spec.root, packages, None):
             run_subprocess(command)
 
-        new_packages = self.list_packages(executable=executable)
+        new_packages = self.list(executable=executable)
         spec.update_packages(packages=new_packages)
-
-    def list_packages(
-        self, executable: Union[str, Path], verbose: bool = False
-    ) -> List[str]:
-        command = [str(executable), "-m", "pip", "list", "--format=freeze"]
-        # `pip list` output: table header, separator, package list
-        # _, packages = flat_pkg_table[0], flat_pkg_table[2:]
-        # return lmap(lambda x: "==".join(x.split()[:2]), packages)
-
-        rc, pip_output = run_subprocess(command)
-
-        return pip_output.splitlines()
-
-    def is_linked_venv(self, spec: PythonSpec):
-        root = Path(spec.root)
-        if self.venv_home != "" and root.parent == Path(self.venv_home):
-            return True
-        return False

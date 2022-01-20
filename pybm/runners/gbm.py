@@ -4,8 +4,7 @@ from typing import List, Optional, Dict, Any
 import pybm.runners.util as runner_util
 from pybm import PybmError
 from pybm.config import PybmConfig
-from pybm.runners.base import BenchmarkRunner
-from pybm.specs import BenchmarkEnvironment
+from pybm.runners.base import BaseRunner
 from pybm.util.common import lfilter
 from pybm.util.extras import get_extras
 
@@ -18,7 +17,7 @@ except ImportError:
     GBM_INSTALLED = False
 
 
-class GoogleBenchmarkRunner(BenchmarkRunner):
+class GoogleBenchmarkRunner(BaseRunner):
     """
     A benchmark runner class interface designed to dispatch benchmark runs
     in pybm using Google Benchmark's Python bindings.
@@ -47,46 +46,29 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
 
         super().__init__(config=config)
 
-        self.with_interleaving: bool = config.get_value(
-            "runner.GoogleBenchmarkWithRandomInterleaving"
-        )
-
-        self.aggregates_only: bool = config.get_value(
-            "runner.GoogleBenchmarkSaveAggregatesOnly"
-        )
-
-    def add_arguments(self):
-        # TODO: Add GBM command line options
-        return []
-
-    def create_flags(
-        self,
-        environment: BenchmarkEnvironment,
-        repetitions: int = 1,
-        benchmark_filter: Optional[str] = None,
-        benchmark_context: Optional[List[str]] = None,
-    ) -> List[str]:
-
-        flags = super(GoogleBenchmarkRunner, self).create_flags(
-            environment=environment,
-            repetitions=repetitions,
-            benchmark_filter=benchmark_filter,
-            benchmark_context=benchmark_context,
-        )
-
-        # JSON is the only supported output file format in GBM
-        flags += [f"{self.prefix}_format=json"]
-
-        if self.with_interleaving:
-            flags.append("--benchmark_enable_random_interleaving=true")
-
-        if self.aggregates_only:
-            flags.append("--benchmark_report_aggregates_only")
-
-        return flags
+    def additional_arguments(self):
+        return [
+            {
+                "flags": "--enable-random-interleaving",
+                "type": bool,
+                "action": "store_true",
+                "default": False,
+                "help": "Whether to enable the random interleaving feature "
+                "in Google Benchmark. This can reduce run-to-run "
+                "variance by running benchmarks in random order.",
+            },
+            {
+                "flags": "--report-aggregates-only",
+                "type": bool,
+                "action": "store_true",
+                "default": False,
+                "help": "Whether to report aggregates (mean/stddev) only "
+                "in Google Benchmark instead of the raw data.",
+            },
+        ]
 
     def run_benchmark(
-        self, argv: List[str] = None, context: Dict[str, Any] = None
+        self, argv: Optional[List[str]] = None, context: Dict[str, Any] = None
     ) -> int:
         def flags_parser(argv: List[str]):
             argv = gbm.initialize(argv)
@@ -100,8 +82,11 @@ class GoogleBenchmarkRunner(BenchmarkRunner):
         # inject environment-specific context into args
         argv += self.get_current_context()
 
+        # JSON is the only supported output file format in GBM
+        argv += [f"{self.prefix}_format=json"]
+
         runtime_context = lfilter(lambda x: x.startswith("--benchmark_context"), argv)
 
-        runner_util.validate_context(runtime_context, parsed=True)
+        runner_util.validate_context(runtime_context, parsed=False)
 
         return app.run(run_benchmarks, argv=argv, flags_parser=flags_parser)

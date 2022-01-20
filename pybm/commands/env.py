@@ -1,7 +1,7 @@
 import argparse
-from typing import List
+from typing import List, Callable, Mapping, Optional
 
-from pybm.builders.base import PythonEnvBuilder
+from pybm.builders import BaseBuilder
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_builder_class
 from pybm.env_store import EnvironmentStore
@@ -10,6 +10,8 @@ from pybm.logging import get_logger
 from pybm.status_codes import ERROR, SUCCESS
 
 logger = get_logger(__name__)
+
+EnvSubcommand = Callable[[argparse.Namespace], int]
 
 
 class EnvCommand(CLICommand):
@@ -21,8 +23,8 @@ class EnvCommand(CLICommand):
     usage = (
         "pybm env create <commit-ish> <name> <dest> [<options>]\n"
         "   or: pybm env delete <identifier> [<options>]\n"
-        "   or: pybm env install <packages> [<options>]\n"
-        "   or: pybm env uninstall <packages> [<options>]\n"
+        "   or: pybm env install <identifier> <packages> [<options>]\n"
+        "   or: pybm env uninstall <identifier> <packages> [<options>]\n"
         "   or: pybm env list\n"
         "   or: pybm env update <env> <attr> <value>\n"
     )
@@ -56,8 +58,7 @@ class EnvCommand(CLICommand):
                 default=None,
                 help="Destination directory of "
                 "the new worktree. Defaults to "
-                "repository-name@"
-                "{commit|branch|tag}.",
+                "repository-name@{commit|branch|tag}.",
             )
             self.parser.add_argument(
                 "-f",
@@ -121,81 +122,145 @@ class EnvCommand(CLICommand):
                     help="Force worktree removal, "
                     "including untracked files and changes.",
                 )
+            else:
+                self.parser.add_argument(
+                    "packages",
+                    nargs="*",
+                    default=None,
+                    metavar="<packages>",
+                    help="Package dependencies to install "
+                    "into the new virtual environment.",
+                )
         elif subcommand == "list":
             pass
         elif subcommand == "update":
             pass
 
         assert subcommand is not None, "no valid subcommand specified"
-        builder: PythonEnvBuilder = get_builder_class(config=self.config)
-        builder_name = self.config.get_value("builder.className")
-        builder_group_desc = (
-            f"Additional options from configured environment builder {builder_name!r}"
-        )
-        builder_group = self.parser.add_argument_group(builder_group_desc)
-        # add builder-specific options into the group
-        for arg in builder.add_arguments(command=subcommand):
-            builder_group.add_argument(arg.pop("flags"), **arg)
 
-    def create(self, options: argparse.Namespace, verbose: bool):
-        env_store = EnvironmentStore(config=self.config, verbose=verbose)
-        env_store.create(options=options)
+        builder: BaseBuilder = get_builder_class(config=self.config)
 
-        return SUCCESS
+        builder_args = builder.additional_arguments(command=subcommand)
 
-    def delete(self, options: argparse.Namespace, verbose: bool):
-        env_store = EnvironmentStore(config=self.config, verbose=verbose)
-        env_store.delete(options=options)
+        if builder_args:
+            builder_name = self.config.get_value("builder.name")
+            builder_group_desc = (
+                f"Additional options from configured builder class {builder_name!r}"
+            )
+            builder_group = self.parser.add_argument_group(builder_group_desc)
 
-        return SUCCESS
+            # add builder-specific options into the group
+            for arg in builder_args:
+                builder_group.add_argument(arg.pop("flags"), **arg)
 
-    def install(self, options: argparse.Namespace, verbose: bool):
-        builder: PythonEnvBuilder = get_builder_class(config=self.config)
+    def create(self, options: argparse.Namespace):
+        option_dict = vars(options)
 
-        env_store = EnvironmentStore(config=self.config, verbose=verbose)
+        # verbosity
+        verbose: bool = option_dict.pop("verbose")
 
-        target_env = env_store.get(options.identifier)
+        # git worktree info
+        commit_ish: str = option_dict.pop("commit_ish")
+        name: str = option_dict.pop("name")
+        destination: str = option_dict.pop("destination")
+        force: bool = option_dict.pop("force")
+        checkout: bool = not option_dict.pop("no_checkout")
+        resolve_commits: bool = option_dict.pop("resolve_commits")
 
-        builder.install_packages(
-            spec=target_env.python,
-            packages=options.packages,
-            requirements_file=options.requirements_file,
-            options=options.pip_options,
-            verbose=verbose,
-        )
-
-        return SUCCESS
-
-    def uninstall(self, options: argparse.Namespace, verbose: bool):
-        builder: PythonEnvBuilder = get_builder_class(config=self.config)
+        # Python env info
+        link_dir: str = option_dict.pop("link_dir")
 
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
-
-        target_env = env_store.get(options.identifier)
-
-        builder.uninstall_packages(
-            spec=target_env.python,
-            packages=options.packages,
-            options=options.pip_options,
-            verbose=verbose,
+        env_store.create(
+            commit_ish=commit_ish,
+            name=name,
+            destination=destination,
+            force=force,
+            checkout=checkout,
+            resolve_commits=resolve_commits,
+            link_dir=link_dir,
+            **option_dict,
         )
 
         return SUCCESS
 
-    def list(self, options: argparse.Namespace, verbose: bool):
+    def delete(self, options: argparse.Namespace):
+        option_dict = vars(options)
+
+        # verbosity
+        verbose: bool = option_dict.pop("verbose")
+
+        # env name / git worktree info
+        identifier: str = option_dict.pop("identifier")
+        force: bool = option_dict.pop("force")
+
+        env_store = EnvironmentStore(config=self.config, verbose=verbose)
+        env_store.delete(identifier=identifier, force=force)
+
+        return SUCCESS
+
+    def install(self, options: argparse.Namespace):
+        option_dict = vars(options)
+
+        # verbosity
+        verbose: bool = option_dict.pop("verbose")
+
+        # env name / git worktree info
+        identifier: str = option_dict.pop("identifier")
+
+        # builder arguments
+        packages: Optional[List[str]] = option_dict.pop("packages")
+
+        builder: BaseBuilder = get_builder_class(config=self.config)
+
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
 
+        target_env = env_store.get(identifier)
+
+        builder.install(
+            spec=target_env.python, packages=packages, verbose=verbose, **option_dict
+        )
+
+        return SUCCESS
+
+    def uninstall(self, options: argparse.Namespace):
+        option_dict = vars(options)
+
+        # verbosity
+        verbose: bool = option_dict.pop("verbose")
+
+        identifier: str = option_dict.pop("identifier")
+
+        # builder arguments
+        packages: List[str] = option_dict.pop("packages")
+
+        builder: BaseBuilder = get_builder_class(config=self.config)
+
+        env_store = EnvironmentStore(config=self.config, verbose=verbose)
+
+        target_env = env_store.get(identifier)
+
+        builder.uninstall(
+            spec=target_env.python, packages=packages, verbose=verbose, **option_dict
+        )
+
+        return SUCCESS
+
+    def list(self, options: argparse.Namespace):
+        verbose: bool = options.verbose
+
+        env_store = EnvironmentStore(config=self.config, verbose=verbose)
         env_store.list()
 
         return SUCCESS
 
-    def update(self, options: argparse.Namespace, verbose: bool):
+    def update(self, options: argparse.Namespace):
         raise PybmError("env updating is not implemented yet.")
 
     def run(self, args: List[str]):
         logger.debug(f"Running command: `{self.format_call(args)}`")
 
-        subcommand_handlers = {
+        subcommand_handlers: Mapping[str, EnvSubcommand] = {
             "create": self.create,
             "delete": self.delete,
             "install": self.install,
@@ -214,6 +279,4 @@ class EnvCommand(CLICommand):
 
         options = self.parser.parse_args(args)
 
-        verbose: bool = options.verbose
-
-        return subcommand_handlers[subcommand](options, verbose)
+        return subcommand_handlers[subcommand](options)

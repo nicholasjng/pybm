@@ -6,7 +6,7 @@ from typing import Optional, List, Any, Dict
 
 from pybm.config import PybmConfig, get_runner_class
 from pybm.exceptions import PybmError
-from pybm.runners.base import BenchmarkRunner
+from pybm.runners import BaseRunner
 from pybm.status_codes import SUCCESS
 
 
@@ -26,6 +26,6 @@ def run(argv: Optional[List[str]] = None, context: Dict[str, Any] = None) -> int
             "the context object."
         )
     config_file = PybmConfig.load(".pybm/config.yaml")
-    runner: BenchmarkRunner = get_runner_class(config_file)
+    runner: BaseRunner = get_runner_class(config_file)
     runner.run_benchmark(argv, context=context)
     return SUCCESS
