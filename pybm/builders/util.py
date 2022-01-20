@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Union, Tuple
 
 from pybm.exceptions import BuilderError
+from pybm.specs import PythonSpec
 from pybm.util.common import version_tuple
 from pybm.util.path import get_subdirs, list_contents
 from pybm.util.subprocess import run_subprocess
@@ -83,3 +84,10 @@ def is_valid_venv(path: Union[str, Path], verbose: bool = False) -> bool:
     if verbose:
         print("successful.")
     return True
+
+
+def is_linked_venv(home: str, spec: PythonSpec):
+    root = Path(spec.root)
+    if home != "" and root.parent == Path(home):
+        return True
+    return False
