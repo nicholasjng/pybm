@@ -7,7 +7,7 @@ from pybm.util.common import lmap
 
 def abbrev_home(path: Union[str, Path]) -> str:
     str_path = str(path)
-    home_dir = os.getenv("HOME")
+    home_dir = os.getenv("HOME" if os.name != "nt" else "USERPROFILE")
     if home_dir is not None and str_path.startswith(home_dir):
         str_path = str_path.replace(home_dir, "~")
     return str_path
