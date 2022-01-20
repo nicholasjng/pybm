@@ -10,6 +10,7 @@ class BaseCommand(CLICommand):
     Commands:
 
     apply   - Run a benchmarking workflow specified in a YAML file.
+    compare - Compare benchmark results between different git references.
     config  - Display and change pybm configuration values.
     env     - Create and manage benchmarking environments.
     init    - Initialize a git repository for pybm benchmarking.

@@ -47,9 +47,7 @@ class ConfigCommand(CLICommand):
             self.parser.add_argument(
                 "value",
                 metavar="<value>",
-                help="Config option to display. For a "
-                "comprehensive list of options, "
-                "run `pybm config list`.",
+                help="New value to set for the chosen config option.",
             )
         elif subcommand == "describe":
             self.parser.add_argument(
@@ -79,7 +77,8 @@ class ConfigCommand(CLICommand):
                 print("failed.")
             raise e
 
-    def get(self, options: argparse.Namespace, verbose: bool) -> int:
+    def get(self, options: argparse.Namespace) -> int:
+        verbose: bool = options.verbose
         attr: str = options.option
 
         with self.context("get", attr, None, verbose):
@@ -93,8 +92,10 @@ class ConfigCommand(CLICommand):
 
         return SUCCESS
 
-    def set(self, options: argparse.Namespace, verbose: bool) -> int:
-        attr, value = options.option, options.value
+    def set(self, options: argparse.Namespace) -> int:
+        verbose: bool = options.verbose
+
+        attr, value = str(options.option), str(options.value)
         path = ".pybm/config.yaml"
 
         with self.context("set", attr, value, verbose):
@@ -103,8 +104,7 @@ class ConfigCommand(CLICommand):
         return SUCCESS
 
     @staticmethod
-    def list(options: argparse.Namespace, verbose: bool) -> int:
-        del verbose  # unused
+    def list(options: argparse.Namespace) -> int:
         config = PybmConfig.load(".pybm/config.yaml")
 
         for name in get_all_names(config):
@@ -119,13 +119,12 @@ class ConfigCommand(CLICommand):
         return SUCCESS
 
     @staticmethod
-    def describe(options: argparse.Namespace, verbose: bool) -> int:
-        del verbose  # unused
-        attr = options.option
+    def describe(options: argparse.Namespace) -> int:
+        attr: str = options.option
 
-        if "__" in attr:
+        if attr.startswith("_"):
             raise PybmError(
-                "Only unprivileged configuration attributes can "
+                "Private configuration attributes cannot "
                 "be described via `pybm config describe`."
             )
 
@@ -151,7 +150,7 @@ class ConfigCommand(CLICommand):
         self.add_arguments(subcommand=subcommand)
 
         # double hyphen prevents `config set` values to be mistaken for
-        # optional arguments (e.g. for venv flags)
+        # optional arguments (e.g. venv flags)
         # https://docs.python.org/3/library/argparse.html#arguments-containing
         if subcommand == "set":
             # Insert the double hyphen after flags, otherwise they break
@@ -161,6 +160,4 @@ class ConfigCommand(CLICommand):
         else:
             options = self.parser.parse_args(args)
 
-        verbose: bool = options.verbose
-
-        return subcommand_handlers[subcommand](options, verbose)
+        return subcommand_handlers[subcommand](options)

@@ -4,7 +4,7 @@ from pybm import PybmConfig
 from pybm.command import CLICommand
 from pybm.config import get_reporter_class
 from pybm.exceptions import PybmError
-from pybm.reporters.base import BenchmarkReporter
+from pybm.reporters import BaseReporter
 from pybm.status_codes import ERROR, SUCCESS
 from pybm.util.path import get_subdirs
 
@@ -14,7 +14,7 @@ class ReportCommand(CLICommand):
     Report benchmark results from specified sources.
     """
 
-    usage = "pybm report <run> <anchor-ref> <compare-refs> [<options>]\n"
+    usage = "pybm report <run> <ref> [<options>]\n"
 
     def __init__(self):
         super(ReportCommand, self).__init__(name="report")
@@ -39,15 +39,19 @@ class ReportCommand(CLICommand):
             help="Reference to display benchmark results for. Mandatory.",
         )
 
-        reporter: BenchmarkReporter = get_reporter_class(config=self.config)
-        reporter_name = self.config.get_value("reporter.className")
-        reporter_group_desc = (
-            f"Additional options from configured reporter class {reporter_name!r}"
-        )
-        reporter_group = self.parser.add_argument_group(reporter_group_desc)
-        # add builder-specific options into the group
-        for arg in reporter.add_arguments():
-            reporter_group.add_argument(arg.pop("flags"), **arg)
+        reporter: BaseReporter = get_reporter_class(config=self.config)
+
+        reporter_args = reporter.additional_arguments()
+
+        if reporter_args:
+            reporter_name = self.config.get_value("reporter.name")
+            reporter_group_desc = (
+                f"Additional options from configured reporter class {reporter_name!r}"
+            )
+            reporter_group = self.parser.add_argument_group(reporter_group_desc)
+            # add builder-specific options into the group
+            for arg in reporter_args:
+                reporter_group.add_argument(arg.pop("flags"), **arg)
 
     def run(self, args: List[str]) -> int:
         if not args:
@@ -57,7 +61,7 @@ class ReportCommand(CLICommand):
         self.add_arguments()
         options = self.parser.parse_args(args)
 
-        reporter: BenchmarkReporter = get_reporter_class(config=self.config)
+        reporter: BaseReporter = get_reporter_class(config=self.config)
 
         # TODO: Parse run to fit schema
         # run = options.run
