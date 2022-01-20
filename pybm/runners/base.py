@@ -23,7 +23,7 @@ class BaseRunner:
         self.prefix = "--benchmark"
 
         # required packages for the runner
-        self.required_packages: List[str] = ["git+https://github.com/nicholasjng/pybm"]
+        self.required_packages: List[str] = ["pybm"]
 
         # result saving directory; create if non-existent
         self.result_dir: str = config.get_value("core.resultdir")
@@ -52,7 +52,11 @@ class BaseRunner:
                 name, version = pkg.split("==")
 
             if name not in names_and_versions:
-                missing_pkgs.append(pkg)
+                # TODO: Improve this to handle non-PyPI package installation
+                if name == "pybm":
+                    missing_pkgs.append("git+https://github.com/nicholasjng/pybm")
+                else:
+                    missing_pkgs.append(pkg)
             else:
                 if version != "" and names_and_versions[name] != version:
                     missing_pkgs.append(pkg)
