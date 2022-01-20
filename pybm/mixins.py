@@ -23,25 +23,25 @@ class StateMixin:
         except AttributeError:
             if default is None:
                 raise PybmError(
-                    f"Class {self.__class__.__name__!r} has no " f"attribute {attr!r}."
+                    f"Class {self.__class__.__name__!r} has no attribute {attr!r}."
                 )
             else:
                 return default
 
     def set_value(self, attr: str, value: Any):
-        *subkeys, key = attr.split(".")
-        obj = self
+        *keys, subkey = attr.split(".")
+        obj: Any = self
 
-        for subkey in subkeys:
-            obj = getattr(obj, subkey, None)
+        for key in keys:
+            obj = getattr(obj, key, None)
 
-        if obj is None or not hasattr(obj, key):
+        if obj is None or not hasattr(obj, subkey):
             raise PybmError(
-                f"Class {self.__class__.__name__!r} has no " f"attribute {attr!r}."
+                f"Class {self.__class__.__name__!r} has no attribute {attr!r}."
             )
 
-        value = self.canonicalize_type(obj, key, value)
-        setattr(obj, key, value)
+        value = self.canonicalize_type(obj, subkey, value)
+        setattr(obj, subkey, value)
 
         return self
 

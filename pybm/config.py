@@ -78,27 +78,28 @@ class PybmConfig(StateMixin):
         print(f"Value type:    {value_type}")
         print(f"Current value: {current!r}")
         print(
-            description_db[group].get(name, "")
-            or f"No description available for {group} attribute {name}."
+            description_db[group].get(
+                name, f"No description available for {group} attribute {name}."
+            )
         )
 
 
 def get_builder_class(config: PybmConfig):
-    class_name = import_from_module(config.get_value("builder.className"))
+    class_name = import_from_module(config.get_value("builder.name"))
     return class_name(config)
 
 
 def get_runner_class(config: PybmConfig):
-    class_name = import_from_module(config.get_value("runner.className"))
+    class_name = import_from_module(config.get_value("runner.name"))
     return class_name(config)
 
 
 def get_reporter_class(config: PybmConfig):
-    class_name = import_from_module(config.get_value("reporter.className"))
+    class_name = import_from_module(config.get_value("reporter.name"))
     return class_name(config)
 
 
-def get_runner_requirements(config: PybmConfig):
+def get_runner_requirements(config: PybmConfig) -> List[str]:
     return get_runner_class(config).required_packages
 
 
@@ -114,95 +115,80 @@ def get_all_keys(config: PybmConfig) -> List[str]:
 
 description_db: Dict[str, Descriptions] = {
     "core": {
-        "datetimeFormatter": "Datetime format string used to format "
+        "datefmt": "Datetime format string used to format "
         "timestamps for environment creation and "
         "modification. For a comprehensive list of "
         "identifiers and options, check the Python "
-        "standard library documentation on "
-        "datetime.strftime: "
-        "https://docs.python.org/3/library/"
-        "datetime.html#strftime-strptime-behavior.",
-        "defaultLevel": "Default level to be used in pybm logging.",
-        "logFile": "Name of the log file to write debug logs to, like `pip "
+        "standard library documentation on datetime.strftime: "
+        "https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior.",
+        "loglevel": "Default level to be used in pybm logging.",
+        "logfile": "Name of the log file to write debug logs to, like `pip "
         "install` or `git worktree` command outputs.",
-        "loggingFormatter": "Formatter string used to format logs in pybm. "
-        "For a comprehensive list of identifiers and "
-        "options, check the Python standard library "
-        "documentation on logging formatters: "
-        "https://docs.python.org/3/library/"
-        "logging.html#formatter-objects.",
+        "logfmt": "Formatter string used to format logs in pybm. "
+        "For a comprehensive list of identifiers and options, check the "
+        "Python standard library documentation on logging formatters: "
+        "https://docs.python.org/3/library/logging.html#formatter-objects.",
     },
     "git": {
         "createWorktreeInParentDirectory": "Whether to create worktrees "
-        "in the parent directory of "
-        "your git repository by default. "
-        "Some IDEs may get confused "
-        "when you initialize another "
-        "git worktree inside your main "
-        "repository, so this option "
-        "provides a way to keep your main "
-        "repo folder clean without having "
-        'to explicitly type "../my-dir" '
-        "every time you create a git "
-        "worktree.",
+        "in the parent directory of your git repository by default. "
+        "Some IDEs may get confused when you initialize another "
+        "git worktree inside your main repository, so this option "
+        "provides a way to keep your main repo folder clean without having "
+        "to explicitly type '../my-dir' every time you create a git worktree.",
     },
     "builder": {
-        "className": "Name of the builder class used in pybm to build "
+        "name": "Name of the builder class used in pybm to manage "
         "virtual Python environments. If you want to supply "
         "your own custom builder class, set this value to "
-        "point to your custom subclass of "
-        "pybm.builders.PythonEnvBuilder.",
-        "homeDirectory": "Optional home directory containing pre-built "
+        "your custom subclass of pybm.builders.BaseBuilder.",
+        "homedir": "Optional home directory containing pre-built "
         "virtual environments. The default for pybm is to "
-        "create the virtual environment directly into "
-        "the new git worktree, but you can also choose "
-        "to link existing environments as subdirectories "
-        "of this location.",
-        "localWheelCaches": "A string of local directories separated by "
+        "create the virtual environment directly into the new git worktree, "
+        "but you can also choose to link existing environments, which are assumed "
+        "to be subdirectories of this location.",
+        "wheelcaches": "A string of local directories separated by "
         'colons (":"), like a Unix PATH variable,'
         "containing prebuilt wheels for Python packages. "
         "Set this if you request a package that has no "
         "wheels for your Python version or architecture "
         "available, and have to build target-specific "
         "wheels yourself.",
-        "persistentPipInstallOptions": "Comma-separated list of options "
+        "pipinstalloptions": "Comma-separated list of options "
         "passed to `pip install` in a "
         "pip-based builder. Set this if you "
         "use a number of `pip install` "
         "options consistently, and do not want "
         "to type them out in every call to "
         "`pybm env install`.",
-        "persistentPipUninstallOptions": "Comma-separated list of options "
+        "pipuninstalloptions": "Comma-separated list of options "
         "passed to `pip uninstall` in a "
         "pip-based builder. Set this if you "
         "use a number of `pip uninstall` "
         "options consistently, and do not "
         "want to type them out in every "
         "call to `pybm env uninstall`.",
-        "persistentVenvOptions": "Comma-separated list of options "
-        "for virtual environment creation in a "
-        "builder using venv. Set this if you "
-        "use a number of `python -m venv` "
-        "options consistently, and do not want "
-        "to type them out in every call to "
-        "`pybm env create`.",
+        "venvoptions": "Comma-separated list of options "
+        "for virtual environment creation in a venv-based"
+        "builder. Set this if you use a number "
+        "of `python -m venv` options consistently, "
+        "and do not want to type them out in every `pybm env create` call.",
     },
     "runner": {
-        "className": "Name of the runner class used in pybm to run "
+        "name": "Name of the runner class used in pybm to run "
         "benchmarks inside Python virtual environments. If you "
         "want to supply your own custom runner class, set this "
-        "value to point to your custom subclass of "
-        "pybm.runners.base.BenchmarkRunner.",
-        "failFast": "",
-        "numRepetitions": "",
-        "contextProviders": "",
-        "GoogleBenchmarkWithRandomInterleaving": "",
-        "GoogleBenchmarkSaveAggregatesOnly": "",
+        "value to your custom subclass of pybm.runners.BaseRunner.",
+        "failfast": "",
+        "contextproviders": "",
     },
     "reporter": {
-        "className": "",
-        "resultDirectory": "",
-        "targetTimeUnit": "",
-        "significantDigits": "",
+        "name": "Name of the reporter class used in pybm to report and compare "
+        "benchmark results. If you want to supply your own custom reporter class, "
+        "set this value to your custom subclass of pybm.reporters.BaseReporter.",
+        "timeunit": "Time unit for benchmark timings. Valid options are s/sec, "
+        "ms/msec, us/usec, and ns/nsec, where either spelling is admissible.",
+        "significantdigits": "Number of significant digits to round floating point "
+        "results to in console display.",
     },
 }

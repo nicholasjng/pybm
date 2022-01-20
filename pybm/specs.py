@@ -10,7 +10,7 @@ from pybm.util.subprocess import run_subprocess
 
 @dataclass(frozen=True)
 class PythonSpec:
-    """Dataclass representing a Python virtual environment specification."""
+    """Dataclass representing a Python virtual environment."""
 
     root: str = field()
     executable: str = field()
@@ -25,7 +25,7 @@ class PythonSpec:
 
 @dataclass
 class Worktree:
-    """Dataclass representing a git worktree specification."""
+    """Dataclass representing a git worktree."""
 
     root: str
     commit: str
@@ -48,12 +48,11 @@ class Worktree:
         return Worktree(root=root, branch=branch, commit=commit, tag=tag)
 
     def get_ref_and_type(self) -> Tuple[str, str]:
-        # either the branch or tag are not None
         if self.branch is not None:
             return self.branch, "branch"
         elif self.tag is not None:
             return self.tag, "tag"
-        else:
+        else:  # commit is always not None
             return self.commit, "commit"
 
     def has_untracked_files(self):
@@ -99,11 +98,12 @@ class BenchmarkEnvironment(StateMixin):
 
 @dataclass
 class CoreGroup:
-    datetimeFormatter: str = "%d/%m/%Y, %H:%M:%S"
-    defaultLevel: int = logging.DEBUG
-    envFile: str = ".pybm/envs.yaml"
-    logFile: str = "logs/logs.txt"
-    loggingFormatter: str = "%(asctime)s — %(name)-12s " "— %(levelname)s — %(message)s"
+    datefmt: str = "%d/%m/%Y, %H:%M:%S"
+    envfile: str = ".pybm/envs.yaml"
+    logfile: str = "logs/logs.txt"
+    logfmt: str = "%(asctime)s — %(name)-12s " "— %(levelname)s — %(message)s"
+    loglevel: int = logging.DEBUG
+    resultdir: str = "results"
 
 
 @dataclass
@@ -113,31 +113,26 @@ class GitGroup:
 
 @dataclass
 class BuilderGroup:
-    className: str = "pybm.builders.stdlib.VenvBuilder"
-    homeDirectory: str = ""
-    localWheelCaches: str = ""
-    persistentVenvOptions: str = ""
-    persistentPipInstallOptions: str = ""
-    persistentPipUninstallOptions: str = ""
+    name: str = "pybm.builders.VenvBuilder"
+    homedir: str = ""
+    wheelcaches: str = ""
+    venvoptions: str = ""
+    pipinstalloptions: str = ""
+    pipuninstalloptions: str = ""
 
 
 @dataclass
 class RunnerGroup:
-    className: str = "pybm.runners.stdlib.TimeitRunner"
-    resultDirectory: str = "results"
-    failFast: bool = False
-    numRepetitions: int = 1
-    contextProviders: str = ""
-    GoogleBenchmarkWithRandomInterleaving: bool = True
-    GoogleBenchmarkSaveAggregatesOnly: bool = True
+    name: str = "pybm.runners.TimeitRunner"
+    failfast: bool = False
+    contextproviders: str = ""
 
 
 @dataclass
 class ReporterGroup:
-    className: str = "pybm.reporters.console.JSONConsoleReporter"
-    resultDirectory: str = "results"
-    targetTimeUnit: str = "usec"
-    significantDigits: int = 2
+    name: str = "pybm.reporters.ConsoleReporter"
+    timeunit: str = "usec"
+    significantdigits: int = 2
 
 
 EmptyPythonSpec = PythonSpec(root="", executable="", version="")
