@@ -45,7 +45,7 @@ work correctly. To check your git version, run `git --version`, which
 should result in an output showing the version number, similar to the one above.
 
 On the Python side, in its most standard configuration, **pybm** works almost
-entirely within the Python standard library - only the `pyyaml` package is
+entirely within the Python standard library - only the `toml` package is
 required for configuration management. Additional functionality is available via
 extras installation:
 

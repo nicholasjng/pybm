@@ -18,7 +18,7 @@ class CompareCommand(CLICommand):
 
     def __init__(self):
         super(CompareCommand, self).__init__(name="compare")
-        self.config = PybmConfig.load(".pybm/config.yaml")
+        self.config = PybmConfig.load()
 
     def add_arguments(self):
         self.parser.add_argument(

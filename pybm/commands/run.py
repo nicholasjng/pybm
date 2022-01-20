@@ -21,7 +21,7 @@ class RunCommand(CLICommand):
 
     def __init__(self):
         super(RunCommand, self).__init__(name="run")
-        self.config = PybmConfig.load(".pybm/config.yaml")
+        self.config = PybmConfig.load()
 
     def add_arguments(self):
         self.parser.add_argument(
@@ -30,8 +30,7 @@ class RunCommand(CLICommand):
             help="Name of the benchmark target(s) to "
             "run. Can be a path to a single file, "
             "a directory, or a glob expression. "
-            "Given paths need to be relative to "
-            "the worktree root.",
+            "Given paths need to be relative to the worktree root.",
             metavar="<benchmark>",
         )
         self.parser.add_argument(
@@ -53,8 +52,7 @@ class RunCommand(CLICommand):
             default=False,
             dest="run_as_module",
             help="Run benchmark targets as modules. "
-            "Use this to benchmark code "
-            "outside of a package.",
+            "Use this to benchmark code outside of a package.",
         )
         self.parser.add_argument(
             "--checkout",
@@ -170,18 +168,16 @@ class RunCommand(CLICommand):
                     "The --all switch can only be used as a "
                     "substitute for specific environment IDs, but "
                     "the following environments were requested: "
-                    f"{', '.join(env_ids)}. Please either omit "
-                    f"the --all switch or the specific "
-                    f"environment IDs."
+                    f"{', '.join(env_ids)}. Please either omit the "
+                    f"--all switch or the specific environment IDs."
                 )
         else:
             if checkout_mode:
                 raise PybmError(
                     "When running in checkout mode, please specify at "
                     "least one valid git reference to benchmark. To "
-                    "benchmark the current checkout in the "
-                    '"root" environment, use the command '
-                    f"`pybm run {source_path} root`."
+                    "benchmark the current checkout in the 'root'"
+                    "environment, use the command `pybm run {source_path} root`."
                 )
 
             if not run_all and len(env_store.environments) > 1:
@@ -189,14 +185,13 @@ class RunCommand(CLICommand):
                     "No environments were specified as "
                     "positional arguments to `pybm run`, "
                     "but more than one environment exists "
-                    "in the current repository. Please "
-                    "supply your desired target environments "
-                    "specifically when calling `pybm run`, or "
-                    "use the --all switch."
+                    "in the current repository. Please supply "
+                    "the desired target environments specifically"
+                    "when calling `pybm run`, or use the --all switch."
                 )
 
         if run_all:
-            env_ids = [env.name for env in env_store.environments]
+            env_ids = list(env_store.environments.keys())
 
         # in order to revert to original checkout after benchmarks
         root_checkout = env_store.get("root").worktree.get_ref_and_type()

@@ -29,8 +29,8 @@ class Worktree:
 
     root: str
     commit: str
-    branch: Optional[str]
-    tag: Optional[str]
+    branch: Optional[str] = None
+    tag: Optional[str] = None
 
     @classmethod
     def from_list(cls, wt_info: List[str]):
@@ -74,16 +74,16 @@ class BenchmarkEnvironment(StateMixin):
     worktree: Worktree
     python: PythonSpec
     created: str
-    last_modified: str
+    lastmod: str
 
     @classmethod
-    def from_dict(cls, spec: Dict[str, Any]):
+    def from_dict(cls, name: str, spec: Dict[str, Any]):
         return BenchmarkEnvironment(
-            name=spec["name"],
+            name=name,
             worktree=Worktree(**spec["worktree"]),
             python=PythonSpec(**spec["python"]),
             created=spec["created"],
-            last_modified=spec["last_modified"],
+            lastmod=spec["lastmod"],
         )
 
     def to_dict(self):
@@ -92,14 +92,14 @@ class BenchmarkEnvironment(StateMixin):
             "worktree": asdict(self.worktree),
             "python": asdict(self.python),
             "created": self.created,
-            "last_modified": self.last_modified,
+            "lastmod": self.lastmod,
         }
 
 
 @dataclass
 class CoreGroup:
     datefmt: str = "%d/%m/%Y, %H:%M:%S"
-    envfile: str = ".pybm/envs.yaml"
+    envfile: str = ".pybm/envs.toml"
     logfile: str = "logs/logs.txt"
     logfmt: str = "%(asctime)s — %(name)-12s " "— %(levelname)s — %(message)s"
     loglevel: int = logging.DEBUG
@@ -108,7 +108,7 @@ class CoreGroup:
 
 @dataclass
 class GitGroup:
-    createWorktreeInParentDirectory: bool = True
+    basedir: str = ".."
 
 
 @dataclass

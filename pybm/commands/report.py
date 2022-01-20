@@ -18,7 +18,7 @@ class ReportCommand(CLICommand):
 
     def __init__(self):
         super(ReportCommand, self).__init__(name="report")
-        self.config = PybmConfig.load(".pybm/config.yaml")
+        self.config = PybmConfig.load()
 
     def add_arguments(self):
         self.parser.add_argument(

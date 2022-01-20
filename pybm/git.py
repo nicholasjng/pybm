@@ -99,7 +99,7 @@ class GitWorktreeWrapper:
     def __init__(self, config: PybmConfig):
         super().__init__()
         self.command_db = _git_worktree_flags
-        self.create_in_parent = config.get_value("git.createWorktreeInParentDirectory")
+        self.base_dir: Path = Path(config.get_value("git.basedir"))
 
     def prepare_subprocess_args(self, command: str, *args, **kwargs):
         call_args = ["git", "worktree", command, *args]
@@ -196,8 +196,8 @@ class GitWorktreeWrapper:
             of_type = "switch" if offender.startswith("-") else "command"
 
             msg = (
-                f"Running the command `{' '.join(command)}` requires a "
-                f"minimum git version of {minimum}, but your git version "
+                f"Running the command `{' '.join(command)}` requires at "
+                f"minimum git version {minimum}, but your git version "
                 f"was found to be only {version_string(GIT_VERSION)}. "
                 f"This version requirement is because the {of_type} "
                 f"{offender!r} was used, which was first introduced in "
@@ -238,10 +238,7 @@ class GitWorktreeWrapper:
         ref, ref_type = resolve_ref(commit_ish, resolve_commits=resolve_commits)
 
         if verbose:
-            print(
-                f"Interpreting given git reference {commit_ish!r} "
-                f"as a {ref_type} name."
-            )
+            print(f"Interpreting given reference {commit_ish!r} as a {ref_type} name.")
 
         # check for existing worktree with the same ref
         if not force and self.get_worktree_by_attr(ref_type, ref) is not None:
@@ -260,12 +257,7 @@ class GitWorktreeWrapper:
             worktree_id = "@".join([current_directory.name, escaped])
 
             # create relative to the desired directory
-            if self.create_in_parent:
-                dest_dir = current_directory.parent
-            else:
-                dest_dir = current_directory
-
-            destination = str(dest_dir / worktree_id)
+            destination = str((self.base_dir / worktree_id).resolve())
 
         with git_worktree_context("add", ref, ref_type, destination):
             self.run_command(
@@ -332,8 +324,7 @@ class GitWorktreeWrapper:
             raise GitError(
                 f"Failed to switch checkout of worktree "
                 f"{abbrev_home(worktree.root)}: Object {ref!r} "
-                f"could not be understood as a valid "
-                f"git reference."
+                f"could not be understood as a valid git reference."
             )
 
         checkout(ref=ref, cwd=worktree.root)
