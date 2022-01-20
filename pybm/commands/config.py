@@ -55,8 +55,7 @@ class ConfigCommand(CLICommand):
                 type=str,
                 metavar="<option>",
                 help="Config option to describe. For a "
-                "comprehensive list of options, "
-                "run `pybm config list`.",
+                "comprehensive list of options, run `pybm config list`.",
             )
 
     @contextlib.contextmanager
@@ -82,7 +81,7 @@ class ConfigCommand(CLICommand):
         attr: str = options.option
 
         with self.context("get", attr, None, verbose):
-            value = PybmConfig.load(".pybm/config.yaml").get_value(attr)
+            value = PybmConfig.load(".pybm/config.toml").get_value(attr)
 
         if is_dataclass(value):
             for k, v in asdict(value).items():
@@ -96,7 +95,7 @@ class ConfigCommand(CLICommand):
         verbose: bool = options.verbose
 
         attr, value = str(options.option), str(options.value)
-        path = ".pybm/config.yaml"
+        path = ".pybm/config.toml"
 
         with self.context("set", attr, value, verbose):
             PybmConfig.load(path).set_value(attr, value).save(path)
@@ -105,7 +104,7 @@ class ConfigCommand(CLICommand):
 
     @staticmethod
     def list(options: argparse.Namespace) -> int:
-        config = PybmConfig.load(".pybm/config.yaml")
+        config = PybmConfig.load(".pybm/config.toml")
 
         for name in get_all_names(config):
             group = config.get_value(name)
@@ -128,7 +127,7 @@ class ConfigCommand(CLICommand):
                 "be described via `pybm config describe`."
             )
 
-        config = PybmConfig.load(".pybm/config.yaml")
+        config = PybmConfig.load(".pybm/config.toml")
         config.describe(attr)
 
         return SUCCESS

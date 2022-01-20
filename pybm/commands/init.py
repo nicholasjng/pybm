@@ -83,18 +83,17 @@ class InitCommand(CLICommand):
 
         config_dir = Path(options.config_dir)
         config_dir.mkdir(parents=True, exist_ok=True)
-        config_path = config_dir / "config.yaml"
+        config_path = config_dir / "config.toml"
 
         if options.remove_existing:
-            for p in list_contents(config_dir, file_suffix=".yaml", names_only=True):
+            for p in list_contents(config_dir, file_suffix=".toml", names_only=True):
                 (config_dir / p).unlink()
 
         if config_path.exists():
             raise PybmError(
                 "Configuration file already exists. "
                 "If you want to write a new config file, "
-                'please specify the "--rm" option '
-                "to `pybm init`."
+                "please specify the '--rm' option to `pybm init`."
             )
         else:
             config.save(config_path)

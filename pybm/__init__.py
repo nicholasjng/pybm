@@ -25,7 +25,7 @@ def run(argv: Optional[List[str]] = None, context: Dict[str, Any] = None) -> int
             'this e.g. by passing "globals()" as a value for '
             "the context object."
         )
-    config_file = PybmConfig.load(".pybm/config.yaml")
+    config_file = PybmConfig.load()
     runner: BaseRunner = get_runner_class(config_file)
     runner.run_benchmark(argv, context=context)
     return SUCCESS

@@ -2,9 +2,9 @@ import sys
 from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
-from typing import List, Any, Optional
+from typing import Any, Optional, Dict
 
-import yaml
+import toml
 
 from pybm import PybmConfig
 from pybm.builders import BaseBuilder
@@ -13,7 +13,7 @@ from pybm.config import get_builder_class, get_runner_requirements
 from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.specs import Worktree, PythonSpec, BenchmarkEnvironment
-from pybm.util.common import lmap
+from pybm.util.common import dvmap, dmap
 from pybm.util.git import disambiguate_info, is_main_worktree
 from pybm.util.print import (
     abbrev_home,
@@ -50,7 +50,7 @@ class EnvironmentStore:
         self.verbose = verbose
         self.missing_ok = missing_ok
 
-        self.environments: List[BenchmarkEnvironment] = []
+        self.environments: Dict[str, BenchmarkEnvironment] = {}
         self.load()
 
     def load(self):
@@ -71,15 +71,15 @@ class EnvironmentStore:
                 )
 
             with open(self.env_file, "r") as cfg:
-                envs = yaml.load(cfg, Loader=yaml.FullLoader)
+                envs = toml.load(cfg)
 
             if self.verbose:
                 print("done.")
 
-            self.environments = lmap(BenchmarkEnvironment.from_dict, envs)
+            self.environments = dmap(BenchmarkEnvironment.from_dict, envs)
 
     def save(self):
-        envs = lmap(lambda x: x.to_dict(), self.environments)
+        envs = dvmap(lambda x: x.to_dict(), self.environments)
 
         if self.verbose:
             print(
@@ -88,7 +88,7 @@ class EnvironmentStore:
             )
 
         with open(self.env_file, "w") as cfg:
-            yaml.dump(envs, cfg)
+            toml.dump(envs, cfg)
 
         if self.verbose:
             print("done.")
@@ -152,10 +152,10 @@ class EnvironmentStore:
                 worktree=worktree,
                 python=python_spec,
                 created=created,
-                last_modified=created,
+                lastmod=created,
             )
 
-            self.environments.append(environment)
+            self.environments[name] = environment
 
             print(f"Successfully created benchmark environment for ref {commit_ish!r}.")
 
@@ -185,7 +185,7 @@ class EnvironmentStore:
 
             git_worktree.remove(str(worktree_root), force=force)
 
-            self.environments.remove(env_to_remove)
+            env_to_remove = self.environments.pop(env_name)
 
             print(f"Successfully removed benchmark environment {env_name!r}.")
 
@@ -204,17 +204,17 @@ class EnvironmentStore:
             if info is not None:
                 env = next(
                     e
-                    for e in self.environments
+                    for e in self.environments.values()
                     if e.worktree == git_worktree.get_worktree_by_attr(info, value)
                 )
             else:
-                env = next(e for e in self.environments if e.name == value)
+                env = self.environments[value]
 
             if self.verbose:
                 print("success.")
 
             return env
-        except StopIteration:
+        except (StopIteration, KeyError):
             if self.verbose:
                 print("failed.")
 
@@ -232,7 +232,7 @@ class EnvironmentStore:
         ]
 
         env_data = [column_names]
-        for env in self.environments:
+        for env in self.environments.values():
             root: str = env.get_value("worktree.root")
 
             values = [env.get_value("name")]
@@ -274,10 +274,10 @@ class EnvironmentStore:
                     worktree=worktree,
                     python=python_spec,
                     created=created,
-                    last_modified=created,
+                    lastmod=created,
                 )
 
-                self.environments.append(env)
+                self.environments[name] = env
 
     def switch(self, name: str, ref: str) -> BenchmarkEnvironment:
         git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
@@ -291,8 +291,7 @@ class EnvironmentStore:
 
             if self.verbose:
                 print(
-                    f"Switching checkout of environment {env.name!r} to "
-                    f"{ref_type} {ref!r}."
+                    f"Switching checkout of environment {name!r} to {ref_type} {ref!r}."
                 )
 
             worktree = git_worktree.switch(

@@ -4,7 +4,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Union, Dict, List
 
-import yaml
+import toml
 
 from pybm.exceptions import PybmError
 from pybm.mixins import StateMixin
@@ -23,6 +23,8 @@ __all__ = [
 
 Descriptions = Dict[str, str]
 
+CONFIG = ".pybm/config.toml"
+
 
 @dataclass
 class PybmConfig(StateMixin):
@@ -33,7 +35,7 @@ class PybmConfig(StateMixin):
     reporter: ReporterGroup = ReporterGroup()
 
     @classmethod
-    def load(cls, path: Union[str, pathlib.Path]):
+    def load(cls, path: Union[str, pathlib.Path] = CONFIG):
         if isinstance(path, str):
             path = Path(path)
 
@@ -45,7 +47,7 @@ class PybmConfig(StateMixin):
             )
 
         with open(path, "r") as config_file:
-            spec = yaml.load(config_file, Loader=yaml.FullLoader)
+            spec = toml.load(config_file)
 
         return PybmConfig(
             core=CoreGroup(**spec["core"]),
@@ -66,7 +68,7 @@ class PybmConfig(StateMixin):
 
     def save(self, path: Union[str, pathlib.Path]):
         with open(path, "w") as config_file:
-            yaml.dump(self.to_dict(), config_file)
+            toml.dump(self.to_dict(), config_file)
 
     def describe(self, attr):
         current = self.get_value(attr)
@@ -130,12 +132,11 @@ description_db: Dict[str, Descriptions] = {
         "https://docs.python.org/3/library/logging.html#formatter-objects.",
     },
     "git": {
-        "createWorktreeInParentDirectory": "Whether to create worktrees "
-        "in the parent directory of your git repository by default. "
+        "basedir": "Where to create new git worktrees. This value is set with the "
+        "parent directory of your repository as default. "
         "Some IDEs may get confused when you initialize another "
         "git worktree inside your main repository, so this option "
-        "provides a way to keep your main repo folder clean without having "
-        "to explicitly type '../my-dir' every time you create a git worktree.",
+        "provides an easy way to maintain a clean repository.",
     },
     "builder": {
         "name": "Name of the builder class used in pybm to manage "
