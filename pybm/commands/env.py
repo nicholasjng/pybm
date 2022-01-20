@@ -31,7 +31,7 @@ class EnvCommand(CLICommand):
 
     def __init__(self):
         super(EnvCommand, self).__init__(name="env")
-        config = PybmConfig.load(".pybm/config.yaml")
+        config = PybmConfig.load()
         self.config = config
 
     def add_arguments(self, subcommand: str = None):
