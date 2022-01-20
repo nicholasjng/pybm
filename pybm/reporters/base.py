@@ -25,6 +25,11 @@ class BaseReporter:
     ) -> None:
         raise NotImplementedError
 
+    def load(
+        self, ref: str, result: Union[str, Path], target_filter: Optional[str] = None
+    ):
+        raise NotImplementedError
+
     def report(
         self,
         ref: str,
@@ -33,9 +38,4 @@ class BaseReporter:
         benchmark_filter: Optional[str] = None,
         context_filter: Optional[str] = None,
     ) -> None:
-        raise NotImplementedError
-
-    def load(
-        self, ref: str, result: Union[str, Path], target_filter: Optional[str] = None
-    ):
         raise NotImplementedError

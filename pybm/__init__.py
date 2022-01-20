@@ -10,13 +10,13 @@ from pybm.runners import BaseRunner
 from pybm.status_codes import SUCCESS
 
 
-def run(argv: Optional[List[str]] = None, context: Dict[str, Any] = None) -> int:
+def run(argv: Optional[List[str]] = None, module_context: Dict[str, Any] = None) -> int:
     """
     Syntactic sugar for dispatching a run inside a benchmark target file.
     The argv argument should realistically never need to be specified,
     while the context should almost always be the `globals()` object.
     """
-    if context is None:
+    if module_context is None:
         raise PybmError(
             "Context is missing. When running a benchmark on a "
             "Python source file target, you need to pass the "
@@ -27,5 +27,5 @@ def run(argv: Optional[List[str]] = None, context: Dict[str, Any] = None) -> int
         )
     config_file = PybmConfig.load()
     runner: BaseRunner = get_runner_class(config_file)
-    runner.run_benchmark(argv, context=context)
+    runner.run_benchmark(argv, module_context=module_context)
     return SUCCESS

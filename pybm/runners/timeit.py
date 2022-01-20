@@ -41,10 +41,10 @@ class TimeitRunner(BaseRunner):
         return context_dict
 
     def run_benchmark(
-        self, argv: List[str] = None, context: Dict[str, Any] = None
+        self, argv: List[str] = None, module_context: Dict[str, Any] = None
     ) -> int:
 
-        if context is None:
+        if module_context is None:
             raise PybmError(
                 "Missing module context. Please specify a context for "
                 "benchmark execution (the easiest way to do this is by "
@@ -62,12 +62,11 @@ class TimeitRunner(BaseRunner):
         json_obj: Dict[str, Any] = {}
 
         module_targets = runner_util.filter_targets(
-            module_context=context, regex_filter=args.benchmark_filter
+            module_context=module_context, regex_filter=args.benchmark_filter
         )
 
         # valid timeit target <=> is function + takes no args
         module_targets = dfilter(is_valid_timeit_target, module_targets)
-
         # TODO: Log warning about thrown away targets
 
         repetitions: int = args.benchmark_repetitions

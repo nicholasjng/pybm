@@ -151,11 +151,13 @@ class VenvBuilder(BaseBuilder):
         elif command == "uninstall":
             args = [
                 {
-                    "flags": "packages",
-                    "nargs": "+",
-                    "metavar": "<packages>",
-                    "help": "Package dependencies to uninstall "
-                    "from the benchmarking environment using pip.",
+                    "flags": "-r",
+                    "type": str,
+                    "default": None,
+                    "metavar": "<requirements>",
+                    "dest": "requirements_file",
+                    "help": "Requirements file containing dependencies to "
+                    "uninstall from the chosen virtual environment.",
                 },
                 {
                     "flags": "--pip-options",

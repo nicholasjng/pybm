@@ -170,6 +170,6 @@ class BaseRunner:
         return parser.parse_args(flags)
 
     def run_benchmark(
-        self, argv: Optional[List[str]] = None, context: Dict[str, Any] = None
+        self, argv: Optional[List[str]] = None, module_context: Dict[str, Any] = None
     ) -> int:
         raise NotImplementedError

@@ -180,8 +180,14 @@ description_db: Dict[str, Descriptions] = {
         "benchmarks inside Python virtual environments. If you "
         "want to supply your own custom runner class, set this "
         "value to your custom subclass of pybm.runners.BaseRunner.",
-        "failfast": "",
-        "contextproviders": "",
+        "failfast": "Whether to abort the benchmark process prematurely on the first "
+        "encountered exception instead of continuing until completion.",
+        "contextproviders": "A colon-separated list of context provider functions. "
+        "In pybm benchmarks, context can be specified to include "
+        "additional information in the resulting JSON files. "
+        "A context provider function in pybm takes no arguments "
+        "and returns two string values, which are used as key "
+        "and value for the benchmark context object.",
     },
     "reporter": {
         "name": "Name of the reporter class used in pybm to report and compare "
