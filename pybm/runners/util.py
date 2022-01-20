@@ -46,18 +46,18 @@ def discover_targets(
     worktree: Worktree, source_path: Union[str, Path], source_ref: Optional[str] = None
 ):
     root = worktree.root
-    ref, ref_type = worktree.get_ref_and_type()
+    current_ref, ref_type = worktree.get_ref_and_type()
 
     # boolean flag indicating checkout
     checkout_complete = False
 
     print(
-        f"Starting benchmark run for {ref_type} {ref!r} "
+        f"Starting benchmark run for {ref_type} {current_ref!r} "
         f"in worktree {abbrev_home(root)!r} ."
     )
 
     try:
-        if source_ref is not None:
+        if source_ref is not None and source_ref != current_ref:
             if worktree.has_untracked_files():
                 raise PybmError(
                     "Sourcing benchmarks from other git "
@@ -80,7 +80,7 @@ def discover_targets(
             checkout_complete = True
 
         print(
-            f"Discovering benchmark targets for {ref_type} {ref!r} "
+            f"Discovering benchmark targets for {ref_type} {current_ref!r} "
             f"in worktree {abbrev_home(root)!r}.....",
             end="",
         )
@@ -112,13 +112,13 @@ def discover_targets(
     finally:
         if source_ref is not None and checkout_complete:
             # restore benchmark contents from original ref
-            get_from_history(ref=ref, resource=source_path, directory=root)
+            get_from_history(ref=current_ref, resource=source_path, directory=root)
 
             # revert checkout of untracked files with `git clean`
             worktree.clean()
 
             print(
-                f"Finished benchmark run for {ref_type} {ref!r} "
+                f"Finished benchmark run for {ref_type} {current_ref!r} "
                 f"in worktree {abbrev_home(root)!r} ."
             )
 
