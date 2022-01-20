@@ -68,7 +68,7 @@ class GoogleBenchmarkRunner(BaseRunner):
         ]
 
     def run_benchmark(
-        self, argv: Optional[List[str]] = None, context: Dict[str, Any] = None
+        self, argv: Optional[List[str]] = None, module_context: Dict[str, Any] = None
     ) -> int:
         def flags_parser(argv: List[str]):
             argv = gbm.initialize(argv)

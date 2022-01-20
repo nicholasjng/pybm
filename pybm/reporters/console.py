@@ -337,33 +337,6 @@ class ConsoleReporter(BaseReporter):
 
         self.log_to_console(compared_results)
 
-    def report(
-        self,
-        ref: str,
-        result: Union[str, Path],
-        target_filter: Optional[str] = None,
-        benchmark_filter: Optional[str] = None,
-        context_filter: Optional[str] = None,
-    ):
-
-        benchmark_results = self.load(
-            ref=ref, result=result, target_filter=target_filter
-        )
-
-        filter_fn = partial(
-            filter_result,
-            context_filter=context_filter,
-            benchmark_filter=benchmark_filter,
-        )
-
-        process_fn = partial(process_result, target_time_unit=self.target_time_unit)
-
-        filtered_results = lmap(filter_fn, benchmark_results)
-
-        processed_results = flatten(lmap(process_fn, filtered_results))
-
-        self.log_to_console(processed_results)
-
     def load(
         self, ref: str, result: Union[str, Path], target_filter: Optional[str] = None
     ) -> List[Dict[str, Any]]:
@@ -410,6 +383,33 @@ class ConsoleReporter(BaseReporter):
 
             print(make_line(res.values(), column_widths, padding=padding))
             # TODO: Print summary about improvements etc.
+
+    def report(
+        self,
+        ref: str,
+        result: Union[str, Path],
+        target_filter: Optional[str] = None,
+        benchmark_filter: Optional[str] = None,
+        context_filter: Optional[str] = None,
+    ):
+
+        benchmark_results = self.load(
+            ref=ref, result=result, target_filter=target_filter
+        )
+
+        filter_fn = partial(
+            filter_result,
+            context_filter=context_filter,
+            benchmark_filter=benchmark_filter,
+        )
+
+        process_fn = partial(process_result, target_time_unit=self.target_time_unit)
+
+        filtered_results = lmap(filter_fn, benchmark_results)
+
+        processed_results = flatten(lmap(process_fn, filtered_results))
+
+        self.log_to_console(processed_results)
 
     def transform_result(self, bm: Dict[str, Any]) -> Dict[str, str]:
         """Finalize column header names, cast all values to string and

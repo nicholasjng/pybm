@@ -1,13 +1,15 @@
 import argparse
 import contextlib
 from dataclasses import asdict, is_dataclass
-from typing import List, Optional
+from typing import List, Optional, Mapping, Callable
 
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_all_names
 from pybm.exceptions import PybmError
 from pybm.status_codes import ERROR, SUCCESS
 from pybm.util.common import lpartition
+
+EnvSubcommand = Callable[[argparse.Namespace], int]
 
 
 class ConfigCommand(CLICommand):
@@ -133,7 +135,7 @@ class ConfigCommand(CLICommand):
         return SUCCESS
 
     def run(self, args: List[str]):
-        subcommand_handlers = {
+        subcommand_handlers: Mapping[str, EnvSubcommand] = {
             "set": self.set,
             "get": self.get,
             "list": self.list,
