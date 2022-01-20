@@ -1,14 +1,13 @@
-import argparse
 import sys
 from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
-from typing import List, Any
+from typing import List, Any, Optional
 
 import yaml
 
 from pybm import PybmConfig
-from pybm.builders.base import PythonEnvBuilder
+from pybm.builders import BaseBuilder
 from pybm.builders.util import is_valid_venv
 from pybm.config import get_builder_class, get_runner_requirements
 from pybm.exceptions import PybmError
@@ -46,8 +45,8 @@ class EnvironmentStore:
         self, config: PybmConfig, verbose: bool = False, missing_ok: bool = False
     ):
         self.config = config
-        self.env_file = Path(self.config.get_value("core.envFile"))
-        self.fmt = self.config.get_value("core.datetimeFormatter")
+        self.env_file = Path(self.config.get_value("core.envfile"))
+        self.fmt = self.config.get_value("core.datefmt")
         self.verbose = verbose
         self.missing_ok = missing_ok
 
@@ -94,42 +93,49 @@ class EnvironmentStore:
         if self.verbose:
             print("done.")
 
-    def create(self, options: argparse.Namespace) -> BenchmarkEnvironment:
-        git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
-        builder: PythonEnvBuilder = get_builder_class(config=self.config)
+    def create(
+        self,
+        commit_ish: str,
+        name: str,
+        destination: str,
+        force: bool,
+        checkout: bool,
+        resolve_commits: bool,
+        link_dir: Optional[str],
+        **builder_kwargs,
+    ) -> BenchmarkEnvironment:
 
-        commit_ish = options.commit_ish
+        git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
+        builder: BaseBuilder = get_builder_class(config=self.config)
 
         print(f"Creating benchmark environment for git ref {commit_ish!r}.")
 
         with ExitStack() as ctx:
             worktree = git_worktree.add(
                 commit_ish=commit_ish,
-                destination=options.destination,
-                force=options.force,
-                checkout=not options.no_checkout,
-                resolve_commits=options.resolve_commits,
+                destination=destination,
+                force=force,
+                checkout=checkout,
+                resolve_commits=resolve_commits,
             )
 
             ctx.callback(cleanup_worktree, git_worktree, worktree)
 
-            if options.link_dir is None:
+            if link_dir is None:
                 python_spec = builder.create(
-                    options.python_executable,
                     destination=Path(worktree.root) / "venv",
-                    options=options.venv_options,
+                    **builder_kwargs,
                 )
             else:
-                python_spec = builder.link(options.link_dir)
+                python_spec = builder.link(link_dir)
 
             ctx.callback(cleanup_venv, builder, worktree, python_spec)
 
-            # installing runner requirements and pybm
-            required = get_runner_requirements(config=self.config)
-            required.append("git+https://github.com/nicholasjng/pybm")
-
-            builder.install_packages(
-                spec=python_spec, packages=required, verbose=self.verbose
+            # install runner requirements
+            builder.install(
+                spec=python_spec,
+                packages=get_runner_requirements(config=self.config),
+                verbose=self.verbose,
             )
 
             if worktree is not None and python_spec is not None:
@@ -137,7 +143,7 @@ class EnvironmentStore:
                 ctx.pop_all()
                 ctx.callback(self.save)
 
-            name = options.name or f"env_{len(self.environments) + 1}"
+            name = name or f"env_{len(self.environments) + 1}"
 
             created = datetime.now().strftime(self.fmt)
 
@@ -155,14 +161,14 @@ class EnvironmentStore:
 
         return environment
 
-    def delete(self, options: argparse.Namespace) -> BenchmarkEnvironment:
-        builder: PythonEnvBuilder = get_builder_class(config=self.config)
+    def delete(self, identifier: str, force: bool) -> BenchmarkEnvironment:
+        builder: BaseBuilder = get_builder_class(config=self.config)
         git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
 
         with ExitStack() as ctx:
             ctx.callback(self.save)
 
-            env_to_remove = self.get(options.identifier)
+            env_to_remove = self.get(identifier)
             env_name = env_to_remove.name
 
             print(
@@ -175,9 +181,9 @@ class EnvironmentStore:
 
             # Remove venv first if inside the worktree to avoid git problems
             if venv_root.exists() and venv_root.parent == worktree_root:
-                builder.delete(venv_root)
+                builder.delete(venv_root, verbose=self.verbose)
 
-            git_worktree.remove(str(worktree_root), force=options.force)
+            git_worktree.remove(str(worktree_root), force=force)
 
             self.environments.remove(env_to_remove)
 
@@ -243,7 +249,7 @@ class EnvironmentStore:
                 print(make_separator(column_widths, padding=padding))
 
     def sync(self):
-        builder: PythonEnvBuilder = get_builder_class(config=self.config)
+        builder: BaseBuilder = get_builder_class(config=self.config)
         git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
 
         with ExitStack() as ctx:
