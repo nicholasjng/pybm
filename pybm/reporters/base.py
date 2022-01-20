@@ -4,15 +4,15 @@ from typing import Union, Optional
 from pybm import PybmConfig
 
 
-class BenchmarkReporter:
+class BaseReporter:
     def __init__(self, config: PybmConfig):
-        self.result_dir: Path = Path(config.get_value("reporter.resultDirectory"))
+        self.result_dir: Path = Path(config.get_value("core.resultdir"))
 
-        self.target_time_unit: str = config.get_value("reporter.targetTimeUnit")
+        self.target_time_unit: str = config.get_value("reporter.timeunit")
 
-        self.significant_digits: int = config.get_value("reporter.significantDigits")
+        self.significant_digits: int = config.get_value("reporter.significantdigits")
 
-    def add_arguments(self):
+    def additional_arguments(self):
         raise NotImplementedError
 
     def compare(
@@ -22,7 +22,7 @@ class BenchmarkReporter:
         target_filter: Optional[str] = None,
         benchmark_filter: Optional[str] = None,
         context_filter: Optional[str] = None
-    ):
+    ) -> None:
         raise NotImplementedError
 
     def report(
@@ -32,7 +32,7 @@ class BenchmarkReporter:
         target_filter: Optional[str] = None,
         benchmark_filter: Optional[str] = None,
         context_filter: Optional[str] = None,
-    ):
+    ) -> None:
         raise NotImplementedError
 
     def load(
