@@ -1,4 +1,4 @@
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 # Disables flake8 errors for unused imports (project structuring)
 # flake8: noqa: F401
