@@ -177,7 +177,7 @@ class RunCommand(CLICommand):
                     "When running in checkout mode, please specify at "
                     "least one valid git reference to benchmark. To "
                     "benchmark the current checkout in the 'root'"
-                    "environment, use the command `pybm run {source_path} root`."
+                    f"environment, use the command `pybm run {source_path} root`."
                 )
 
             if not run_all and len(env_store.environments) > 1:
@@ -254,6 +254,15 @@ class RunCommand(CLICommand):
                             "Something went wrong during the "
                             "benchmark. stderr output of the "
                             f"dispatched subprocess:\n{data}"
+                        )
+                    elif not data:
+                        raise PybmError(
+                            "No result data was obtained from the dispatched "
+                            "benchmark subprocess. Please check that the "
+                            "configured benchmark runner actually writes the results "
+                            "to stdout. If you are using the Google Benchmark runner, "
+                            "please adapt your benchmark files to use the proper "
+                            "Google Benchmark functions."
                         )
                     else:
                         # TODO: Switch this to a general IO Connector

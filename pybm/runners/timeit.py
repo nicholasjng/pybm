@@ -2,7 +2,7 @@ import json
 import sys
 import time
 import timeit
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Optional
 from contextlib import redirect_stdout
 
 import pybm.runners.util as runner_util
@@ -41,7 +41,9 @@ class TimeitRunner(BaseRunner):
         return context_dict
 
     def run_benchmark(
-        self, argv: List[str] = None, module_context: Dict[str, Any] = None
+        self,
+        argv: List[str] = None,
+        module_context: Optional[Dict[str, Any]] = None,
     ) -> int:
 
         if module_context is None:

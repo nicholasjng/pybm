@@ -25,30 +25,47 @@ jobs:
 
   example-tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        example: [sum-example, sum-example-gbm]
     steps:
       - name: Check out pybm
         uses: actions/checkout@v2
 
-      - name: Check out example
+      - name: Check out ${{ matrix.example }} repo
         uses: actions/checkout@v2
         with:
           fetch-depth: 0
-          repository: nicholasjng/pybm-sum-example
-          path: sum-example
+          repository: nicholasjng/pybm-${{ matrix.example }}
+          path: ${{ matrix.example }}
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
           python-version: 3.9
 
-      - name: Install dependencies
-        run: python -m pip install wheel pyyaml
-
-      - name: Run sum example test
+      - name: Install pybm and other Python dependencies
         run: |
-          python -m pip install ../
-          python -m venv venv --system-site-packages
-          pybm init -v
+          python -m pip install wheel
+          python -m pip install .. git+https://github.com/google/benchmark
+        working-directory: ${{ matrix.example }}
+
+      - name: Create virtual environment with the current pybm checkout
+        run: python -m venv venv --system-site-packages
+        working-directory: ${{ matrix.example }}
+
+      - name: Initialize pybm environment for use with Google Benchmark
+        if: ${{ matrix.example == 'sum-example-gbm' }}
+        run: pybm init -v -o runner.name=pybm.runners.GoogleBenchmarkRunner
+        working-directory: ${{ matrix.example }}
+
+      - name: Initialize pybm environment for use with timeit
+        if: ${{ matrix.example == 'sum-example' }}
+        run: pybm init -v
+        working-directory: ${{ matrix.example }}
+
+      - name: Run ${{matrix.example}} end-to-end test
+        run: |
           pybm run -m benchmarks master linear-time constant-time --checkout
           pybm compare latest master linear-time constant-time
-        working-directory: sum-example
+        working-directory: ${{ matrix.example }}

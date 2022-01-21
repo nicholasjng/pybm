@@ -35,6 +35,9 @@ unit_table = {
     "nsec": 1e-9,
 }
 
+PRIVILEGED_CONTEXT = ["executable", "ref"]
+PRIVILEGED_INT_VALUED_COLUMNS = ["threads", "repetitions", "iterations"]
+
 
 def get_unique_names(results: List[Dict[str, Any]]):
     if "name" in results[0]:
@@ -69,21 +72,17 @@ def rescale(
     return tkey, scaled_time
 
 
-def reduce(bm: Dict[str, List[Any]]) -> Dict[str, Any]:
+def aggregate(bm: Dict[str, List[Union[int, float]]]) -> Dict[str, Union[int, float]]:
     res: Dict[str, Any] = {}
 
     for k, v in bm.items():
-        if isinstance(v[0], str):
-            assert len(set(v)) == 1, f"got multiple values for string key {k!r}"
-            res[k] = v[0]
-        else:
-            value_type: type = type(v[0])
-            mu = mean(v)
-            sigma = statistics.pstdev(v, mu)
-            # ints, floats which are not time values
-            # type casting floors int values
-            # TODO: Allow other forms of reduction
-            res[k] = (value_type(mu), value_type(sigma))
+        # all elements share one type due to the same schema
+        value_type: type = type(v[0])
+        mu = mean(v)
+        sigma = statistics.pstdev(v, mu)
+        # type casting floors int values
+        # TODO: Allow other forms of reduction
+        res[k] = (value_type(mu), value_type(sigma))
 
     return res
 
@@ -93,8 +92,8 @@ def process_dict(bm: Dict[str, Any], context: Dict[str, str], target_time_unit: 
     construction - name and ref should come first, then timings,
     then iteration counts, then user context, then metrics."""
     # TODO: Assert these two exist
-    python_file = Path(context.pop("executable"))
-    ref = context.pop("ref")
+    python_file = Path(context["executable"])
+    ref = context["ref"]
 
     # manual formatting, POSIX style
     target_path = python_file.parent.name + "/" + python_file.name
@@ -103,6 +102,7 @@ def process_dict(bm: Dict[str, Any], context: Dict[str, str], target_time_unit: 
         "Benchmark Name": target_path + ":" + bm.pop("name"),
         "Reference": ref,
         "Iterations": bm.pop("iterations"),
+        "Repetitions": bm.pop("repetitions"),
     }
 
     time_unit: str = bm.pop("time_unit")
@@ -117,12 +117,14 @@ def process_dict(bm: Dict[str, Any], context: Dict[str, str], target_time_unit: 
 
     formatted.update(processed_times)
 
-    # merge in the benchmark context entirely
-    # TODO: Assert no key occurs twice (i.e. gets overwritten)
-    formatted.update(context)
+    # merge in the remaining benchmark context
+    for k, v in context.items():
+        if k not in PRIVILEGED_CONTEXT:
+            formatted[k] = v
 
     # only thing left should be the user counters
-    formatted.update(bm)
+    # TODO: Think about how to merge in user counters while keeping away excess data
+    # formatted.update(bm)
 
     return formatted
 
@@ -132,14 +134,13 @@ def process_result(benchmark_obj: Dict[str, Any], target_time_unit: str):
     keys = ["context", "benchmarks"]
     if not all(key in benchmark_obj for key in keys):
         raise PybmError(
-            f"Malformed JSON result detected. "
-            f"Result {benchmark_obj} missing at least one "
-            f"of the expected keys {', '.join(keys)}."
+            f"Malformed JSON result detected. Result {benchmark_obj} missing "
+            f"one or more of the expected keys {', '.join(keys)}."
         )
 
     benchmark_list = benchmark_obj["benchmarks"]
     # descriptive statistics on times and user counters
-    reduced_list = reduce_results(benchmark_list)
+    aggregated_list = aggregate_results(benchmark_list)
 
     context = benchmark_obj["context"]
 
@@ -147,22 +148,24 @@ def process_result(benchmark_obj: Dict[str, Any], target_time_unit: str):
         process_dict, context=context, target_time_unit=target_time_unit
     )
 
-    return lmap(process_fn, reduced_list)
+    return lmap(process_fn, aggregated_list)
 
 
 def filter_result(
     res: Dict[str, Any], context_filter: Optional[str], benchmark_filter: Optional[str]
 ) -> Dict[str, Any]:
-    protected_context = ["executable", "ref"]
+    filtered_ctx, context = {}, res["context"]
 
     if context_filter is not None:
-        filtered = dfilter_regex(context_filter, res["context"])
-        # add protected context values back
-        for val in protected_context:
-            if val in res:
-                filtered[val] = res[val]
+        # only display context values matching the filter regex
+        filtered_ctx = dfilter_regex(context_filter, context)
 
-        res["context"] = filtered
+    # add protected context values back, if not already present
+    for val in PRIVILEGED_CONTEXT:
+        if val in context:
+            filtered_ctx[val] = context[val]
+
+        res["context"] = filtered_ctx
 
     if benchmark_filter is not None:
         pattern = re.compile(benchmark_filter)
@@ -189,6 +192,7 @@ def compare_results(results: List[Dict[str, Any]], refs: List[str]):
         res["Speedup"] = speedup
         # TODO: Pop user counters to push them to the back too
         res["Iterations"] = res.pop("Iterations")
+        res["Repetitions"] = res.pop("Repetitions")
 
     missing = len(refs) - len(results)
     fillers = []
@@ -209,28 +213,41 @@ def compare_results(results: List[Dict[str, Any]], refs: List[str]):
     return results + fillers
 
 
-def reduce_results(results: List[Dict[str, Any]]):
+def aggregate_results(results: List[Dict[str, Any]]):
     names = get_unique_names(results)
-    reduced_results = []
+    aggregated_results = []
     partitions = partition_n(len(names), lambda x: names.index(x["name"]), results)
 
     def group_partition(p: List[Dict[str, Any]]):
-        res = collections.defaultdict(list)
+        def partition_fn(key: str, value: Any) -> bool:
+            """Return whether a value should be reduced or not."""
+            if isinstance(value, (int, float)):
+                # Do not aggregate rotected integer attributes and indices
+                if key in PRIVILEGED_INT_VALUED_COLUMNS or key.endswith("index"):
+                    return False
+                else:
+                    return True
+            return False
+
+        values_to_aggregate, constants = collections.defaultdict(list), {}
 
         for bm in p:
             for k, v in bm.items():
-                # filter out rep keys
-                if not k.startswith("repetition"):
-                    res[k].append(v)
+                if partition_fn(k, v):
+                    values_to_aggregate[k].append(v)
+                else:
+                    constants[k] = v
 
-        return res
+        return values_to_aggregate, constants
 
     for partition in partitions:
-        grouped = group_partition(partition)
-        reduced = reduce(grouped)
-        reduced_results.append(reduced)
+        # partition values into reducible values (time / counters) and constants
+        to_aggregate, result = group_partition(partition)
+        aggregated = aggregate(to_aggregate)
+        result.update(aggregated)
+        aggregated_results.append(result)
 
-    return reduced_results
+    return aggregated_results
 
 
 class ConsoleReporter(BaseReporter):
@@ -241,7 +258,6 @@ class ConsoleReporter(BaseReporter):
             "time": self.format_time,
             "rel_time": lambda x: f"{x:+.2%}",
             "Speedup": lambda x: f"{x:.2f}x",
-            "Iterations": lambda x: str(x[0]),
         }
 
     def format_time(self, time: Tuple[float, float]) -> str:
