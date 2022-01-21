@@ -35,8 +35,9 @@ def action_context(action: str, directory: Union[str, Path]):
             f"Successfully {action}ed {new_or_existing} virtual environment in "
             f"location {abbrev_home(directory)}."
         )
-    except BuilderError:
+    except BuilderError as e:
         print("failed.")
+        raise e
 
 
 @contextlib.contextmanager
@@ -63,8 +64,9 @@ def pip_context(
             f"Successfully {action}ed packages {resource} {into_or_from} virtual "
             f"environment in location {directory}."
         )
-    except BuilderError:
+    except BuilderError as e:
         print("failed.")
+        raise e
 
 
 class VenvBuilder(BaseBuilder):
@@ -239,10 +241,10 @@ class VenvBuilder(BaseBuilder):
         spec: PythonSpec,
         packages: Optional[List[str]] = None,
         requirements_file: Optional[str] = None,
-        options: Optional[List[str]] = None,
+        pip_options: Optional[List[str]] = None,
         verbose: bool = False,
     ) -> None:
-        options = options or []
+        options = pip_options or []
         executable = spec.executable
 
         command = [executable, "-m", "pip", "install"]
@@ -316,11 +318,11 @@ class VenvBuilder(BaseBuilder):
         self,
         spec: PythonSpec,
         packages: List[str],
-        options: Optional[List[str]] = None,
+        pip_options: Optional[List[str]] = None,
         verbose: bool = False,
     ) -> None:
 
-        options = options or []
+        options = pip_options or []
         options += self.pip_uninstall_options
         executable = spec.executable
 

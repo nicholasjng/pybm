@@ -50,7 +50,6 @@ class GoogleBenchmarkRunner(BaseRunner):
         return [
             {
                 "flags": "--enable-random-interleaving",
-                "type": bool,
                 "action": "store_true",
                 "default": False,
                 "help": "Whether to enable the random interleaving feature "
@@ -59,11 +58,12 @@ class GoogleBenchmarkRunner(BaseRunner):
             },
             {
                 "flags": "--report-aggregates-only",
-                "type": bool,
                 "action": "store_true",
                 "default": False,
                 "help": "Whether to report aggregates (mean/stddev) only "
-                "in Google Benchmark instead of the raw data.",
+                "in Google Benchmark instead of the raw data. If you uncheck this "
+                "option, mean/median/stddev aggregates are still reported if the "
+                "number of repetitions is greater than 1.",
             },
         ]
 

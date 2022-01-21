@@ -52,7 +52,8 @@ class BaseRunner:
                 name, version = pkg.split("==")
 
             if name not in names_and_versions:
-                # TODO: Improve this to handle non-PyPI package installation
+                # TODO: Put packages as tuples (pkg_name, version, origin) to handle
+                #  non-PyPI package installation(s)
                 if name == "pybm":
                     missing_pkgs.append("git+https://github.com/nicholasjng/pybm")
                 else:
@@ -98,8 +99,9 @@ class BaseRunner:
 
         for k, v in runner_kwargs.items():
             if isinstance(v, bool):
-                # leave out the value, presence of the flag implies "true"
-                flags.append(f"{prefix}_{k}")
+                if v is True:
+                    # leave out the value, presence of the flag implies "true"
+                    flags.append(f"{prefix}_{k}")
             else:
                 flags.append(f"{prefix}_{k}={v}")
 
