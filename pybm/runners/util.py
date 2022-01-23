@@ -15,7 +15,7 @@ from pybm.util.print import abbrev_home
 
 
 def create_rundir(result_dir: Union[str, Path]) -> Path:
-    # int key prevents unexpected sorting results for more then 10
+    # int key prevents unexpected sorting results for more than 10
     # directories (order 1 -> 10 -> 2 -> 3 ...)
     subdirs = sorted(get_subdirs(result_dir), key=int)
 
@@ -43,7 +43,10 @@ def create_subdir(result_dir: Union[str, Path], worktree: Worktree) -> Path:
 
 @contextlib.contextmanager
 def discover_targets(
-    worktree: Worktree, source_path: Union[str, Path], source_ref: Optional[str] = None
+    worktree: Worktree,
+    source_path: Union[str, Path],
+    source_ref: Optional[str] = None,
+    use_legacy_checkout: bool = False,
 ):
     root = worktree.root
     current_ref, ref_type = worktree.get_ref_and_type()
@@ -60,14 +63,11 @@ def discover_targets(
         if source_ref is not None and source_ref != current_ref:
             if worktree.has_untracked_files():
                 raise PybmError(
-                    "Sourcing benchmarks from other git "
-                    "reference requires a clean worktree, "
-                    "but there are "
-                    "untracked files present in the worktree "
-                    f"{abbrev_home(root)}. To fix this, either "
-                    f"add untracked files to this worktree's "
-                    f"staging area with `git add`, "
-                    f"or remove the files with `git clean`."
+                    "Sourcing benchmarks from other git reference requires a clean "
+                    "worktree, but there are untracked files present in the worktree "
+                    f"{abbrev_home(root)}. To fix this, either add untracked files to "
+                    f"this worktree's staging area with `git add`, or remove the files "
+                    f"with `git clean`."
                 )
 
             print(
@@ -75,7 +75,12 @@ def discover_targets(
                 f"reference {source_ref!r} into worktree {abbrev_home(root)!r}."
             )
 
-            get_from_history(ref=source_ref, resource=source_path, directory=root)
+            get_from_history(
+                ref=source_ref,
+                resource=source_path,
+                directory=root,
+                use_legacy_checkout=use_legacy_checkout,
+            )
 
             checkout_complete = True
 
@@ -112,7 +117,12 @@ def discover_targets(
     finally:
         if source_ref is not None and checkout_complete:
             # restore benchmark contents from original ref
-            get_from_history(ref=current_ref, resource=source_path, directory=root)
+            get_from_history(
+                ref=current_ref,
+                resource=source_path,
+                directory=root,
+                use_legacy_checkout=use_legacy_checkout,
+            )
 
             # revert checkout of untracked files with `git clean`
             worktree.clean()
@@ -170,23 +180,17 @@ def validate_context(context: List[str], parsed: bool = False):
         split_ctx = ctx_val.split("=")
         if len(split_ctx) != expected_length:
             raise PybmError(
-                "Could not properly parse context value "
-                f"{ctx_val!r}. Context values need to be "
-                f"given as arguments in the format "
-                f'"--context=<key>=<value>".'
+                f"Could not properly parse context value {ctx_val!r}. Context values "
+                f"need to be given in the format --context='<key>=<value>'."
             )
 
         name, value = split_ctx[-2:]
         if name in seen:
             raise PybmError(
-                f"Multiple values for context value "
-                f"{name!r} were supplied. Perhaps you "
-                f"gave some context information twice, "
-                f"once on the command line as global context, "
-                f"and via a set environment-specific context "
-                f"provider. To check the currently set "
-                f"environment-specific context providers, "
-                f"run the command "
-                f"`pybm config get runner.contextProviders`."
+                f"Multiple values for context value {name!r} were given. Perhaps you "
+                f"gave some context information twice, once on the command line as "
+                f"global context, and via a set environment-specific context provider. "
+                f"To check the currently set environment-specific context providers, "
+                f"run the command `pybm config get runner.contextproviders`."
             )
         seen[name] = value

@@ -109,6 +109,7 @@ class CoreGroup:
 @dataclass
 class GitGroup:
     basedir: str = ".."
+    legacycheckout: bool = False
 
 
 @dataclass

@@ -22,6 +22,7 @@ class RunCommand(CLICommand):
     def __init__(self):
         super(RunCommand, self).__init__(name="run")
         self.config = PybmConfig.load()
+        self.use_legacy_checkout: bool = self.config.get_value("git.legacycheckout")
 
     def add_arguments(self):
         self.parser.add_argument(
@@ -173,8 +174,7 @@ class RunCommand(CLICommand):
                 raise PybmError(
                     "When running in checkout mode, please specify at least one valid "
                     "git reference to benchmark. To benchmark the current checkout in "
-                    f"the 'root' environment, use the command `pybm run {source_path} "
-                    "root`."
+                    f"the 'root' environment, run `pybm run {source_path} root`."
                 )
 
             if not run_all and len(env_store.environments) > 1:
@@ -193,7 +193,7 @@ class RunCommand(CLICommand):
 
         for env_id in env_ids:
             if checkout_mode:
-                # check out given reference
+                # check out given reference into "root" worktree
                 environment = env_store.switch(name="root", ref=env_id)
             else:
                 environment = env_store.get(env_id)
@@ -206,7 +206,10 @@ class RunCommand(CLICommand):
             runner.check_required_packages(environment=environment)
 
             with discover_targets(
-                worktree=worktree, source_path=source_path, source_ref=source_ref
+                worktree=worktree,
+                source_path=source_path,
+                source_ref=source_ref,
+                use_legacy_checkout=self.use_legacy_checkout,
             ) as benchmark_targets:
                 n = len(benchmark_targets)
                 if n > 0:
