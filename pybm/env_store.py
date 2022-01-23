@@ -9,7 +9,7 @@ import toml
 from pybm import PybmConfig
 from pybm.builders import BaseBuilder
 from pybm.builders.util import is_valid_venv
-from pybm.config import get_builder_class, get_runner_requirements
+from pybm.config import get_component_class, get_runner_requirements
 from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.specs import Worktree, PythonSpec, BenchmarkEnvironment
@@ -45,8 +45,16 @@ class EnvironmentStore:
         self, config: PybmConfig, verbose: bool = False, missing_ok: bool = False
     ):
         self.config = config
+
+        # git worktree wrapper and builder class
+        self.git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
+        self.builder: BaseBuilder = get_component_class("builder", config=self.config)
+
+        # relevant config attributes
         self.env_file = Path(self.config.get_value("core.envfile"))
         self.fmt = self.config.get_value("core.datefmt")
+
+        # attributes controlling print behavior
         self.verbose = verbose
         self.missing_ok = missing_ok
 
@@ -105,14 +113,10 @@ class EnvironmentStore:
         link_dir: Optional[str],
         **builder_kwargs,
     ) -> BenchmarkEnvironment:
-
-        git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
-        builder: BaseBuilder = get_builder_class(config=self.config)
-
         print(f"Creating benchmark environment for git ref {commit_ish!r}.")
 
         with ExitStack() as ctx:
-            worktree = git_worktree.add(
+            worktree = self.git_worktree.add(
                 commit_ish=commit_ish,
                 destination=destination,
                 force=force,
@@ -120,20 +124,20 @@ class EnvironmentStore:
                 resolve_commits=resolve_commits,
             )
 
-            ctx.callback(cleanup_worktree, git_worktree, worktree)
+            ctx.callback(cleanup_worktree, self.git_worktree, worktree)
 
             if link_dir is None:
-                python_spec = builder.create(
+                python_spec = self.builder.create(
                     destination=Path(worktree.root) / "venv",
                     **builder_kwargs,
                 )
             else:
-                python_spec = builder.link(link_dir)
+                python_spec = self.builder.link(link_dir)
 
-            ctx.callback(cleanup_venv, builder, worktree, python_spec)
+            ctx.callback(cleanup_venv, self.builder, worktree, python_spec)
 
             # install runner requirements
-            builder.install(
+            self.builder.install(
                 spec=python_spec,
                 packages=get_runner_requirements(config=self.config),
                 verbose=self.verbose,
@@ -163,9 +167,6 @@ class EnvironmentStore:
         return environment
 
     def delete(self, identifier: str, force: bool) -> BenchmarkEnvironment:
-        builder: BaseBuilder = get_builder_class(config=self.config)
-        git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
-
         with ExitStack() as ctx:
             ctx.callback(self.save)
 
@@ -182,9 +183,9 @@ class EnvironmentStore:
 
             # Remove venv first if inside the worktree to avoid git problems
             if venv_root.exists() and venv_root.parent == worktree_root:
-                builder.delete(venv_root, verbose=self.verbose)
+                self.builder.delete(venv_root, verbose=self.verbose)
 
-            git_worktree.remove(str(worktree_root), force=force)
+            self.git_worktree.remove(str(worktree_root), force=force)
 
             env_to_remove = self.environments.pop(env_name)
 
@@ -193,8 +194,6 @@ class EnvironmentStore:
         return env_to_remove
 
     def get(self, value: Any) -> BenchmarkEnvironment:
-        git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
-
         # check for known git info, otherwise use name
         info = disambiguate_info(value)
         attr = "worktree " + info if info else "name"
@@ -206,7 +205,7 @@ class EnvironmentStore:
                 env = next(
                     e
                     for e in self.environments.values()
-                    if e.worktree == git_worktree.get_worktree_by_attr(info, value)
+                    if e.worktree == self.git_worktree.get_worktree_by_attr(info, value)
                 )
             else:
                 env = self.environments[value]
@@ -250,21 +249,18 @@ class EnvironmentStore:
                 print(make_separator(column_widths, padding=padding))
 
     def sync(self):
-        builder: BaseBuilder = get_builder_class(config=self.config)
-        git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
-
         with ExitStack() as ctx:
             ctx.callback(self.save)
-            for i, worktree in enumerate(git_worktree.list()):
+            for i, worktree in enumerate(self.git_worktree.list()):
                 venv_root = Path(worktree.root) / "venv"
 
                 if venv_root.exists() and is_valid_venv(
                     venv_root, verbose=self.verbose
                 ):
-                    python_spec = builder.link(venv_root, verbose=self.verbose)
+                    python_spec = self.builder.link(venv_root, verbose=self.verbose)
                 else:
                     # TODO: Enable auto-grabbing from venv home
-                    python_spec = builder.create(sys.executable, venv_root)
+                    python_spec = self.builder.create(sys.executable, venv_root)
 
                 created = datetime.now().strftime(self.fmt)
 
@@ -281,8 +277,6 @@ class EnvironmentStore:
                 self.environments[name] = env
 
     def switch(self, name: str, ref: str) -> BenchmarkEnvironment:
-        git_worktree: GitWorktreeWrapper = GitWorktreeWrapper(config=self.config)
-
         ref_type = disambiguate_info(ref)
 
         with ExitStack() as ctx:
@@ -295,7 +289,7 @@ class EnvironmentStore:
                     f"Switching checkout of environment {name!r} to {ref_type} {ref!r}."
                 )
 
-            worktree = git_worktree.switch(
+            worktree = self.git_worktree.switch(
                 worktree=env.worktree, ref=ref, ref_type=ref_type
             )
 

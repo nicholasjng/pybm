@@ -91,9 +91,8 @@ class InitCommand(CLICommand):
 
         if config_path.exists():
             raise PybmError(
-                "Configuration file already exists. "
-                "If you want to write a new config file, "
-                "please specify the '--rm' option to `pybm init`."
+                "Configuration file already exists. If you want to write a new "
+                "configuration file, use the '--rm' option to `pybm init`."
             )
         else:
             config.save(config_path)

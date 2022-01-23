@@ -1,15 +1,20 @@
 import collections
 import json
 import re
-import statistics
 from functools import partial
 from pathlib import Path
-from statistics import mean
-from typing import Union, Optional, Any, Dict, List, Callable, Tuple
+from typing import Union, Optional, Any, Dict, List, Callable
 
 from pybm import PybmConfig
 from pybm.exceptions import PybmError
 from pybm.reporters.base import BaseReporter
+from pybm.reporters.util import (
+    rescale,
+    get_unique_names,
+    aggregate,
+    log_to_console,
+    format_time,
+)
 from pybm.util.common import (
     flatten,
     lfilter,
@@ -18,73 +23,11 @@ from pybm.util.common import (
     partition_n,
     lmap,
     dmap,
-    tmap,
 )
 from pybm.util.path import list_contents
-from pybm.util.print import make_line, make_separator
-
-# metric time unit prefix table
-unit_table = {
-    "s": 1.0,
-    "sec": 1.0,
-    "ms": 1e-3,
-    "msec": 1e-3,
-    "us": 1e-6,
-    "usec": 1e-6,
-    "ns": 1e-9,
-    "nsec": 1e-9,
-}
 
 PRIVILEGED_CONTEXT = ["executable", "ref"]
 PRIVILEGED_INT_VALUED_COLUMNS = ["threads", "repetitions", "iterations"]
-
-
-def get_unique_names(results: List[Dict[str, Any]]):
-    if "name" in results[0]:
-        name_key = "name"
-    elif "Benchmark Name" in results[0]:
-        name_key = "Benchmark Name"
-    else:
-        raise AttributeError("Benchmark name could not be found.")
-
-    names = lmap(lambda x: x[name_key], results)
-    return list(set(names))
-
-
-def rescale(
-    key: str, time_value: Tuple[float, float], current_unit: str, target_unit: str
-):
-    ttype = key.split("_")[0]
-    tkey = ttype.upper() if ttype in ["cpu", "gpu"] else "Wall"
-    tkey += f" Time ({target_unit})"
-
-    if current_unit != target_unit:
-        assert current_unit in unit_table, f"unknown time unit {current_unit!r}"
-        assert target_unit in unit_table, f"unknown target time unit {target_unit!r}"
-
-        target: float = unit_table[target_unit]
-        current: float = unit_table[current_unit]
-
-        scaled_time = tmap(lambda x: x * current / target, time_value)
-    else:
-        scaled_time = time_value
-
-    return tkey, scaled_time
-
-
-def aggregate(bm: Dict[str, List[Union[int, float]]]) -> Dict[str, Union[int, float]]:
-    res: Dict[str, Any] = {}
-
-    for k, v in bm.items():
-        # all elements share one type due to the same schema
-        value_type: type = type(v[0])
-        mu = mean(v)
-        sigma = statistics.pstdev(v, mu)
-        # type casting floors int values
-        # TODO: Allow other forms of reduction
-        res[k] = (value_type(mu), value_type(sigma))
-
-    return res
 
 
 def process_dict(bm: Dict[str, Any], context: Dict[str, str], target_time_unit: str):
@@ -179,7 +122,6 @@ def filter_result(
 def compare_results(results: List[Dict[str, Any]], refs: List[str]):
     """Compare results between different refs. Assumes that the results and
     ref lists are sorted in the same order."""
-    assert len(results) > 0, "no results given"
     anchor_result = results[0]
     anchor_ref = refs[0]
     real_key = next(k for k in anchor_result.keys() if k.startswith("Wall"))
@@ -255,22 +197,14 @@ class ConsoleReporter(BaseReporter):
         super(ConsoleReporter, self).__init__(config=config)
         self.padding = 1
         self.formatters: Dict[str, Callable] = {
-            "time": self.format_time,
+            "time": partial(
+                format_time,
+                digits=self.significant_digits,
+                time_unit=self.target_time_unit,
+            ),
             "rel_time": lambda x: f"{x:+.2%}",
             "Speedup": lambda x: f"{x:.2f}x",
         }
-
-    def format_time(self, time: Tuple[float, float]) -> str:
-        tval, std = time
-        digits = self.significant_digits
-
-        if self.target_time_unit.startswith("ns"):
-            # formatting nsecs as ints is nicer
-            res = f"{int(tval)} ± {int(std)}"
-        else:
-            res = f"{tval:.{digits}f} ± {std:.{digits}f}"
-
-        return res
 
     def additional_arguments(self):
         args = [
@@ -279,33 +213,27 @@ class ConsoleReporter(BaseReporter):
                 "type": str,
                 "default": None,
                 "metavar": "<regex>",
-                "help": "Regex filter to selectively report "
-                "benchmark target files. If specified, "
-                "only benchmark files matching the "
-                "given filter will be included "
-                "in the report.",
+                "help": "Regex filter to selectively filter benchmark target files. "
+                "If specified, only benchmark files matching the given filter will be "
+                "included in the report.",
             },
             {
                 "flags": "--benchmark-filter",
                 "type": str,
                 "default": None,
                 "metavar": "<regex>",
-                "help": "Regex filter to selectively "
-                "report benchmarks from the matched target "
-                "files. If specified, only benchmarks "
-                "matching the given filter will be "
-                "included in the report.",
+                "help": "Regex filter to selectively report benchmarks from the "
+                "matched target files. If specified, only benchmarks matching the "
+                "given filter will be included in the report.",
             },
             {
                 "flags": "--context-filter",
                 "type": str,
                 "default": None,
                 "metavar": "<regex>",
-                "help": "Regex filter for additional context "
-                "to report from the benchmarks. If "
-                "specified, only context values "
-                "matching the given context filter "
-                "will be included in the report.",
+                "help": "Regex filter for additional context to report from the "
+                "benchmarks. If specified, only context values matching the given "
+                "context filter will be included in the report.",
             },
         ]
         return args
@@ -313,7 +241,8 @@ class ConsoleReporter(BaseReporter):
     def compare(
         self,
         *refs: str,
-        result: Union[str, Path],
+        results: List[Union[str, Path]],
+        report_absolutes: bool = False,
         target_filter: Optional[str] = None,
         benchmark_filter: Optional[str] = None,
         context_filter: Optional[str] = None,
@@ -321,9 +250,10 @@ class ConsoleReporter(BaseReporter):
         benchmarks_raw = []
 
         for ref in refs:
-            benchmarks_raw += self.load(
-                ref=ref, result=result, target_filter=target_filter
-            )
+            for result in results:
+                benchmarks_raw += self.load(
+                    ref=ref, result=result, target_filter=target_filter
+                )
 
         filter_fn = partial(
             filter_result,
@@ -348,10 +278,14 @@ class ConsoleReporter(BaseReporter):
             processed_results,
         )
 
-        # compare groups of benchmarks
-        compared_results = flatten(lmap(compare_fn, grouped_results))
+        if report_absolutes:
+            compared_results = flatten(lmap(lambda x: x, grouped_results))
+        else:
+            compared_results = flatten(lmap(compare_fn, grouped_results))
 
-        self.log_to_console(compared_results)
+        formatted_results = lmap(self.transform_result, compared_results)
+
+        log_to_console(formatted_results, padding=self.padding)
 
     def load(
         self, ref: str, result: Union[str, Path], target_filter: Optional[str] = None
@@ -360,8 +294,7 @@ class ConsoleReporter(BaseReporter):
 
         if not path.exists() or not path.is_dir():
             raise PybmError(
-                f"Given result path {str(path)!r} does not exist, "
-                f"or is not a directory."
+                f"Given path {str(path)!r} does not exist or is not a directory."
             )
 
         json_files = list_contents(path=path, file_suffix=".json")
@@ -378,54 +311,6 @@ class ConsoleReporter(BaseReporter):
             results.append(benchmark_obj)
 
         return results
-
-    def log_to_console(self, results: List[Dict[str, str]]):
-        formatted_results = lmap(self.transform_result, results)
-
-        header_widths = lmap(len, formatted_results[0].keys())
-
-        data_widths = zip(
-            header_widths, *(lmap(len, d.values()) for d in formatted_results)
-        )
-
-        column_widths: List[int] = lmap(max, data_widths)
-
-        padding = self.padding
-
-        for i, res in enumerate(formatted_results):
-            if i == 0:
-                print(make_line(res.keys(), column_widths, padding=padding))
-                print(make_separator(column_widths, padding=padding))
-
-            print(make_line(res.values(), column_widths, padding=padding))
-            # TODO: Print summary about improvements etc.
-
-    def report(
-        self,
-        ref: str,
-        result: Union[str, Path],
-        target_filter: Optional[str] = None,
-        benchmark_filter: Optional[str] = None,
-        context_filter: Optional[str] = None,
-    ):
-
-        benchmark_results = self.load(
-            ref=ref, result=result, target_filter=target_filter
-        )
-
-        filter_fn = partial(
-            filter_result,
-            context_filter=context_filter,
-            benchmark_filter=benchmark_filter,
-        )
-
-        process_fn = partial(process_result, target_time_unit=self.target_time_unit)
-
-        filtered_results = lmap(filter_fn, benchmark_results)
-
-        processed_results = flatten(lmap(process_fn, filtered_results))
-
-        self.log_to_console(processed_results)
 
     def transform_result(self, bm: Dict[str, Any]) -> Dict[str, str]:
         """Finalize column header names, cast all values to string and

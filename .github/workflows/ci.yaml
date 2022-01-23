@@ -67,5 +67,5 @@ jobs:
       - name: Run ${{matrix.example}} end-to-end test
         run: |
           pybm run -m benchmarks master linear-time constant-time --checkout
-          pybm compare latest master linear-time constant-time
+          pybm compare master linear-time constant-time
         working-directory: ${{ matrix.example }}

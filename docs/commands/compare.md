@@ -2,24 +2,25 @@ The `compare` command
 
 ```shell
 ➜ pybm compare -h
-usage: pybm compare <run> <anchor-ref> <compare-refs> [<options>]
+usage: pybm compare <refs> [<options>]
 
     Report benchmark results from specified sources.
     
 
 positional arguments:
-  <run>                 Benchmark run to report results for. To report the preceding run, use the "latest" keyword. To report results of the n-th preceding run (i.e., n runs ago), use the "latest^{n}"
-                        syntax.
   <refs>                Benchmarked refs to compare. The first given ref will be treated as the anchor ref, relative to which all differences are reported. An error is raised if any of the given refs are
                         not present in the run.
 
 optional arguments:
   -h, --help            Show this message and exit.
   -v                    Enable verbose mode. Makes pybm log information that might be useful for debugging.
+  -I <N>, --include-previous <N>
+                        How many previous runs to including in result comparison. Defaults to 1, which compares only the latest benchmark run.
+  --absolute            Report absolute numbers instead of relative differences.
 
-Additional options from configured reporter class 'pybm.reporters.console.JSONConsoleReporter':
+Additional options from configured reporter class 'pybm.reporters.ConsoleReporter':
   --target-filter <regex>
-                        Regex filter to selectively report benchmark target files. If specified, only benchmark files matching the given filter will be included in the report.
+                        Regex filter to selectively filter benchmark target files. If specified, only benchmark files matching the given filter will be included in the report.
   --benchmark-filter <regex>
                         Regex filter to selectively report benchmarks from the matched target files. If specified, only benchmarks matching the given filter will be included in the report.
   --context-filter <regex>
@@ -34,7 +35,7 @@ differences and other quantifiable changes between the benchmarked references.
 The calling convention for `pybm compare` is as follows.
 
 ```shell
-pybm compare latest my-ref1 my-ref2 my-ref3
+pybm compare my-ref1 my-ref2 my-ref3
 ```
 
 In this example, the `my-ref1` git reference is taken to be the _anchor_ reference, serving as the starting point for
@@ -44,9 +45,6 @@ Then, differences in performance are calculated _relatively to the anchor ref_. 
 seconds on `main`, which is your anchor ref, and 1 second on your compare branch, `my-ref1`. Then, the (signed) relative
 performance difference will be -50%, as the code takes only half the time on the compared branch. If the roles are
 reversed and the compared branch takes 2 seconds instead, the relative performance difference will be +100%.
-
-⚠️ Currently, it is not possible to list anything other than the results of the previous run. More functionality will be
-added in upcoming releases.
 
 ## Filtering data in `pybm compare`
 
@@ -61,7 +59,7 @@ and `bar.py`. To only list benchmark results from `foo.py`, you can do this:
 
 ```shell
 # only compare results from foo.py.
-pybm compare latest my-ref1 my-ref2 ... --benchmark-filter="foo"
+pybm compare my-ref1 my-ref2 ... --benchmark-filter="foo"
 ```
 
 ### Filtering benchmark targets
@@ -91,7 +89,7 @@ def h():
 To only report results from the `f`-like functions, you can use the following command:
 
 ```shell
-pybm compare latest my-ref1 my-ref2 ... --target-filter="f"
+pybm compare my-ref1 my-ref2 ... --target-filter="f"
 ```
 
 ### Filtering benchmark context
@@ -103,7 +101,7 @@ Filtering out context values works like this:
 
 ```shell
 # filter out everything besides `myctx` context values.
-pybm compare latest my-ref1 my-ref2 ... --context-filter="myctx"
+pybm compare my-ref1 my-ref2 ... --context-filter="myctx"
 ```
 
 All the above filtering methods can be combined to selectively report only the data you want.

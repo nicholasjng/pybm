@@ -68,7 +68,7 @@ resolution will likely fail due to the module not residing in Python's module pa
 
 A solution is to write some package metadata (a `setup.py` or `setup.cfg/pyproject.toml` file) and install the package
 from source. If you do not want to do that, however, or want to benchmark your code dynamically (e.g. while developing),
-you can choose to run your Python file as a module:
+you can choose to execute your Python file as a module:
 
 ```shell
 python /path/to/file.py -> python -m path.to.file

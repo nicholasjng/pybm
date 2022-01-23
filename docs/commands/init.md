@@ -29,7 +29,7 @@ need to tweak a specific setting to suit your needs, supply your value of choice
 
 ```shell
 # this sets runner and builder to custom classes
-pybm init -o runner.className=MyRunner -o builder.className=MyPythonBuilder
+pybm init -o runner.name=MyRunner -o builder.name=MyPythonBuilder
 ```
 
 (If you are wondering about the default values or the names of certain config options, run the
