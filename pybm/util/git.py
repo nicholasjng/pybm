@@ -33,8 +33,6 @@ try:
     GIT_VERSION = get_git_version()
 except GitError:
     GIT_VERSION = (0, 0, 0)
-
-
 # ---------------------------------------
 
 
@@ -179,12 +177,27 @@ def checkout(ref: str, cwd: Union[str, Path]):
     git_subprocess(command=command, cwd=cwd)
 
 
-def get_from_history(ref: str, resource: Union[str, Path], directory: Union[str, Path]):
-    """Check out a file or directory from another git reference."""
-    # Source:
-    # https://stackoverflow.com/questions/307579/how-do-i-copy-a-version-of-a-single-file-from-one-git-branch-to-another
-    command = ["git", "restore", "--source", ref, str(resource)]
+def get_from_history(
+    ref: str,
+    resource: Union[str, Path],
+    directory: Union[str, Path],
+    use_legacy_checkout: bool,
+):
+    """Check out a file or directory from another reference in the git history."""
 
-    _feature_guard(min_git=(2, 23, 0))
+    if use_legacy_checkout:
+        # git <2.23: checkouts from other branches are moved to the staging area
+        command = ["git", "checkout", ref, "--", str(resource)]
+    else:
+        # Source: (requires git v2.23.0+)
+        # https://stackoverflow.com/questions/307579/how-do-i-copy-a-version-of-a-single-file-from-one-git-branch-to-another
+        command = ["git", "restore", "--source", ref, str(resource)]
+
+        _feature_guard(min_git=(2, 23, 0))
+
     # errors caught here (e.g. nonexistent resource) are immediately raised
     git_subprocess(command=command, cwd=directory)
+
+    if use_legacy_checkout:
+        # remove checked out resource from staging area
+        git_subprocess(["git", "reset", "HEAD", "--", str(resource)])

@@ -119,6 +119,11 @@ description_db: Dict[str, Descriptions] = {
         "parent directory of your repository as default. Some IDEs may get confused "
         "when you initialize another git worktree inside your main repository, so "
         "this option provides an easy way to maintain a clean repository.",
+        "legacycheckout": "Whether to use the `git checkout <ref> -- <source>` "
+        "command to source benchmark files from another ref instead of `git "
+        "restore --source <ref> <source>`. The latter command is better suited for "
+        "this purpose, but requires at minimum git 2.23. Setting this option to 'true' "
+        "allows the use of older git versions for this purpose.",
     },
     "builder": {
         "name": "Name of the builder class used in pybm to manage "
