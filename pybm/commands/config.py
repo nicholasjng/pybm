@@ -3,8 +3,10 @@ import contextlib
 from dataclasses import asdict, is_dataclass
 from typing import List, Optional, Mapping, Callable
 
+import toml
+
 from pybm.command import CLICommand
-from pybm.config import PybmConfig, get_all_names
+from pybm.config import PybmConfig
 from pybm.exceptions import PybmError
 from pybm.status_codes import ERROR, SUCCESS
 from pybm.util.common import lpartition
@@ -32,8 +34,7 @@ class ConfigCommand(CLICommand):
                 "option",
                 type=str,
                 metavar="<option>",
-                help="Config option to display. For a "
-                "comprehensive list of options, "
+                help="Config option to display. For a comprehensive list of options, "
                 "run `pybm config list`.",
             )
         elif subcommand == "set":
@@ -41,8 +42,7 @@ class ConfigCommand(CLICommand):
                 "option",
                 type=str,
                 metavar="<option>",
-                help="Config option to set. For a "
-                "comprehensive list of options, "
+                help="Config option to set. For a comprehensive list of options, "
                 "run `pybm config list`.",
             )
             # TODO: Revise nargs value for this option
@@ -56,8 +56,8 @@ class ConfigCommand(CLICommand):
                 "option",
                 type=str,
                 metavar="<option>",
-                help="Config option to describe. For a "
-                "comprehensive list of options, run `pybm config list`.",
+                help="Config option to describe. For a comprehensive list of options, "
+                "run `pybm config list`.",
             )
 
     @contextlib.contextmanager
@@ -83,11 +83,10 @@ class ConfigCommand(CLICommand):
         attr: str = options.option
 
         with self.context("get", attr, None, verbose):
-            value = PybmConfig.load(".pybm/config.toml").get_value(attr)
+            value = PybmConfig.load().get_value(attr)
 
         if is_dataclass(value):
-            for k, v in asdict(value).items():
-                print(f"{k} = {v}")
+            print(toml.dumps({attr: asdict(value)}))
         else:
             print(f"{attr} = {value}")
 
@@ -97,10 +96,9 @@ class ConfigCommand(CLICommand):
         verbose: bool = options.verbose
 
         attr, value = str(options.option), str(options.value)
-        path = ".pybm/config.toml"
 
         with self.context("set", attr, value, verbose):
-            PybmConfig.load(path).set_value(attr, value).save(path)
+            PybmConfig.load().set_value(attr, value).save()
 
         return SUCCESS
 
@@ -108,15 +106,8 @@ class ConfigCommand(CLICommand):
     def list(options: argparse.Namespace) -> int:
         config = PybmConfig.load(".pybm/config.toml")
 
-        for name in get_all_names(config):
-            group = config.get_value(name)
-            print(f"Config values for group {name!r}:")
+        print(config.to_string())
 
-            for k, v in asdict(group).items():
-                val = v if v != "" else "(empty string)"
-                print(f"{k} : {val}")
-
-            print("")
         return SUCCESS
 
     @staticmethod
@@ -129,8 +120,7 @@ class ConfigCommand(CLICommand):
                 "be described via `pybm config describe`."
             )
 
-        config = PybmConfig.load(".pybm/config.toml")
-        config.describe(attr)
+        PybmConfig.load().describe(attr)
 
         return SUCCESS
 

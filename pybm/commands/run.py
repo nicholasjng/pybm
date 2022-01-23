@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from pybm.command import CLICommand
-from pybm.config import PybmConfig, get_runner_class
+from pybm.config import PybmConfig, get_component_class
 from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
 from pybm.runners import BaseRunner
@@ -109,7 +109,7 @@ class RunCommand(CLICommand):
             "results in an error.",
         )
 
-        runner: BaseRunner = get_runner_class(config=self.config)
+        runner: BaseRunner = get_component_class("runner", config=self.config)
 
         runner_args = runner.additional_arguments()
 
@@ -132,7 +132,7 @@ class RunCommand(CLICommand):
         options = self.parser.parse_args(args)
         runner_options = vars(options)
 
-        runner: BaseRunner = get_runner_class(config=self.config)
+        runner: BaseRunner = get_component_class("runner", config=self.config)
 
         verbose: bool = runner_options.pop("verbose")
 
@@ -153,11 +153,9 @@ class RunCommand(CLICommand):
 
         if source_path.is_absolute():
             raise PybmError(
-                f"Benchmark path {source_path!r} was given in "
-                f"absolute form. Please specify the targets "
-                f"by a path relative to the worktree root to"
-                f"enable running benchmarks in multiple "
-                f"environments."
+                f"Benchmark path {source_path!r} was given in absolute form. Please "
+                f"specify the targets by a path relative to the worktree root to "
+                f"enable running benchmarks in multiple environments."
             )
 
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
@@ -165,29 +163,26 @@ class RunCommand(CLICommand):
         if len(env_ids) > 0:
             if run_all:
                 raise PybmError(
-                    "The --all switch can only be used as a "
-                    "substitute for specific environment IDs, but "
-                    "the following environments were requested: "
-                    f"{', '.join(env_ids)}. Please either omit the "
-                    f"--all switch or the specific environment IDs."
+                    "The --all switch can only be used as a substitute for specific "
+                    "environment IDs, but the following environments were requested: "
+                    f"{', '.join(env_ids)}. Please either omit the --all switch or "
+                    f"the specific environment IDs."
                 )
         else:
             if checkout_mode:
                 raise PybmError(
-                    "When running in checkout mode, please specify at "
-                    "least one valid git reference to benchmark. To "
-                    "benchmark the current checkout in the 'root'"
-                    f"environment, use the command `pybm run {source_path} root`."
+                    "When running in checkout mode, please specify at least one valid "
+                    "git reference to benchmark. To benchmark the current checkout in "
+                    f"the 'root' environment, use the command `pybm run {source_path} "
+                    "root`."
                 )
 
             if not run_all and len(env_store.environments) > 1:
                 raise PybmError(
-                    "No environments were specified as "
-                    "positional arguments to `pybm run`, "
-                    "but more than one environment exists "
-                    "in the current repository. Please supply "
-                    "the desired target environments specifically"
-                    "when calling `pybm run`, or use the --all switch."
+                    "No environments were given as positional arguments to `pybm run`, "
+                    "but more than one benchmark environment exists in the current "
+                    "repository. Please supply the desired target environments "
+                    "explicitly when calling `pybm run`, or use the --all switch."
                 )
 
         if run_all:
@@ -228,8 +223,8 @@ class RunCommand(CLICommand):
 
                     if runner.fail_fast:
                         error_msg = (
-                            "Aborted benchmark run because fast "
-                            "failure mode was enabled."
+                            "Aborted benchmark run because fast failure mode was "
+                            "enabled."
                         )
                         raise PybmError("\n".join([msg, error_msg]))
                     else:
@@ -251,18 +246,16 @@ class RunCommand(CLICommand):
 
                     if rc != 0:
                         raise PybmError(
-                            "Something went wrong during the "
-                            "benchmark. stderr output of the "
-                            f"dispatched subprocess:\n{data}"
+                            "Something went wrong during the benchmark. stderr output "
+                            f"of the dispatched subprocess:\n{data}"
                         )
                     elif not data:
                         raise PybmError(
                             "No result data was obtained from the dispatched "
-                            "benchmark subprocess. Please check that the "
-                            "configured benchmark runner actually writes the results "
-                            "to stdout. If you are using the Google Benchmark runner, "
-                            "please adapt your benchmark files to use the proper "
-                            "Google Benchmark functions."
+                            "benchmark subprocess. Please check that the configured "
+                            "benchmark runner actually writes the results to stdout. "
+                            "If you are using the Google Benchmark runner, please "
+                            "adapt your benchmark files to use Google Benchmark."
                         )
                     else:
                         # TODO: Switch this to a general IO Connector

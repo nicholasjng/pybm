@@ -3,7 +3,7 @@ from typing import List, Callable, Mapping, Optional
 
 from pybm.builders import BaseBuilder
 from pybm.command import CLICommand
-from pybm.config import PybmConfig, get_builder_class
+from pybm.config import PybmConfig, get_component_class
 from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
 from pybm.logging import get_logger
@@ -138,7 +138,7 @@ class EnvCommand(CLICommand):
 
         assert subcommand is not None, "no valid subcommand specified"
 
-        builder: BaseBuilder = get_builder_class(config=self.config)
+        builder: BaseBuilder = get_component_class("builder", config=self.config)
 
         builder_args = builder.additional_arguments(command=subcommand)
 
@@ -211,7 +211,7 @@ class EnvCommand(CLICommand):
         # builder arguments
         packages: Optional[List[str]] = option_dict.pop("packages")
 
-        builder: BaseBuilder = get_builder_class(config=self.config)
+        builder: BaseBuilder = get_component_class("builder", config=self.config)
 
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
 
@@ -234,7 +234,7 @@ class EnvCommand(CLICommand):
         # builder arguments
         packages: List[str] = option_dict.pop("packages")
 
-        builder: BaseBuilder = get_builder_class(config=self.config)
+        builder: BaseBuilder = get_component_class("builder", config=self.config)
 
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
 

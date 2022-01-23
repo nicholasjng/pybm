@@ -14,7 +14,6 @@ class BaseCommand(CLICommand):
     config  - Display and change pybm configuration values.
     env     - Create and manage benchmarking environments.
     init    - Initialize a git repository for pybm benchmarking.
-    report  - Report results of successful benchmarking runs.
     run     - Run specified benchmarks in different environments.
     """
 

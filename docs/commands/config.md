@@ -42,34 +42,35 @@ To list all available options and their current values, run `pybm config list`:
 
 ```shell
 ➜ pybm config list
-Config values for group 'core':
-datefmt : %d/%m/%Y, %H:%M:%S
-envfile : .pybm/envs.toml
-logfile : logs/logs.txt
-logfmt : %(asctime)s — %(name)-12s — %(levelname)s — %(message)s
-loglevel : 10
-resultdir : results
+[core]
+datefmt = "%d/%m/%Y, %H:%M:%S"
+envfile = ".pybm/envs.toml"
+logfile = "logs/logs.txt"
+logfmt = "%(asctime)s — %(name)-12s — %(levelname)s — %(message)s"
+loglevel = 10
+resultdir = "results"
 
-Config values for group 'git':
-basedir : ..
+[git]
+basedir = ".."
 
-Config values for group 'builder':
-name : pybm.builders.VenvBuilder
-homedir : (empty string)
-wheelcaches : (empty string)
-venvoptions : (empty string)
-pipinstalloptions : (empty string)
-pipuninstalloptions : (empty string)
+[runner]
+name = "pybm.runners.TimeitRunner"
+failfast = false
+contextproviders = ""
 
-Config values for group 'runner':
-name : pybm.runners.TimeitRunner
-failfast : False
-contextproviders : (empty string)
+[builder]
+name = "pybm.builders.VenvBuilder"
+homedir = ""
+wheelcaches = ""
+venvoptions = ""
+pipinstalloptions = ""
+pipuninstalloptions = ""
 
-Config values for group 'reporter':
-name : pybm.reporters.ConsoleReporter
-timeunit : usec
-significantdigits : 2
+[reporter]
+name = "pybm.reporters.ConsoleReporter"
+timeunit = "usec"
+significantdigits = 2
+
 
 ```
 

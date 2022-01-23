@@ -154,7 +154,7 @@ def resolve_commit(ref: str) -> str:
     else:
         command = ["git", "rev-list", "-n", "1", ref]
     _, commit = git_subprocess(command)
-    return commit
+    return commit.rstrip()
 
 
 def disambiguate_info(info: str) -> Optional[str]:

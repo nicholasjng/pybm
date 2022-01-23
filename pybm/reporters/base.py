@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 from pybm import PybmConfig
 
@@ -18,7 +18,8 @@ class BaseReporter:
     def compare(
         self,
         *refs: str,
-        result: Union[str, Path],
+        results: List[Union[str, Path]],
+        report_absolutes: bool = False,
         target_filter: Optional[str] = None,
         benchmark_filter: Optional[str] = None,
         context_filter: Optional[str] = None
@@ -28,14 +29,4 @@ class BaseReporter:
     def load(
         self, ref: str, result: Union[str, Path], target_filter: Optional[str] = None
     ):
-        raise NotImplementedError
-
-    def report(
-        self,
-        ref: str,
-        result: Union[str, Path],
-        target_filter: Optional[str] = None,
-        benchmark_filter: Optional[str] = None,
-        context_filter: Optional[str] = None,
-    ) -> None:
         raise NotImplementedError
