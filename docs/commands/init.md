@@ -1,22 +1,21 @@
 # The `init` command
 
 ```shell
-➜ pybm init -h
-usage: pybm init <config-dir> [<options>]
+➜ pybm init -h               
+usage: pybm init [<options>]
 
     Initialize pybm in a git repository by adding a configuration file
     and an environment list into a directory.
     
-
-positional arguments:
-  <config-dir>          Directory in which to store the pybm configuration data.
 
 optional arguments:
   -h, --help            Show this message and exit.
   -v                    Enable verbose mode. Makes pybm log information that might be useful for debugging.
   --rm                  Overwrite existing configuration.
   -o OVERRIDES, --override OVERRIDES
-                        Override a value by hand for the newly created pybm configuration file.
+                        Override a specific configuration setting with a custom value for the new pybm configuration file. Supplied arguments need to have the form 'key=value'. For a comprehensive list of
+                        configuration options, run `pybm config list`.
+  --skip-global         Skip applying system-wide defaults set in the global config file to the newly created pybm configuration.
 ```
 
 The `pybm init` command creates a configuration file and a state file that tracks the currently available benchmark
@@ -38,3 +37,6 @@ command `pybm config list`.)
 The `-o` switch can be used multiple times to set multiple different values at the same time. If you have a lot of
 default values that you want to set, and do not want to type out long commands each time, consider writing a global pybm
 config - this feature will be added in an upcoming release.
+
+By default, if a global config file is present, global values are used as defaults when running `pybm init`. If you 
+want to avoid adopting global settings locally, you can supply the `--skip-global` switch to `pybm init`.

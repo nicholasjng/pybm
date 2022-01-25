@@ -1,12 +1,12 @@
 import argparse
-import contextlib
 from dataclasses import asdict, is_dataclass
-from typing import List, Optional, Mapping, Callable
+from pathlib import Path
+from typing import List, Mapping, Callable
 
 import toml
 
 from pybm.command import CLICommand
-from pybm.config import PybmConfig
+from pybm.config import PybmConfig, GLOBAL_CONFIG, LOCAL_CONFIG
 from pybm.exceptions import PybmError
 from pybm.status_codes import ERROR, SUCCESS
 from pybm.util.common import lpartition
@@ -29,61 +29,38 @@ class ConfigCommand(CLICommand):
 
     def add_arguments(self, subcommand: str = None):
         # special version action and version kwarg
-        if subcommand == "get":
-            self.parser.add_argument(
-                "option",
-                type=str,
-                metavar="<option>",
-                help="Config option to display. For a comprehensive list of options, "
-                "run `pybm config list`.",
-            )
-        elif subcommand == "set":
-            self.parser.add_argument(
-                "option",
-                type=str,
-                metavar="<option>",
-                help="Config option to set. For a comprehensive list of options, "
-                "run `pybm config list`.",
-            )
-            # TODO: Revise nargs value for this option
+        self.parser.add_argument(
+            "option",
+            type=str,
+            metavar="<option>",
+            help=f"Config option to {subcommand}. For a comprehensive list of options, "
+            f"run `pybm config list`.",
+        )
+
+        if subcommand == "set":
             self.parser.add_argument(
                 "value",
                 metavar="<value>",
                 help="New value to set for the chosen config option.",
             )
-        elif subcommand == "describe":
-            self.parser.add_argument(
-                "option",
-                type=str,
-                metavar="<option>",
-                help="Config option to describe. For a comprehensive list of options, "
-                "run `pybm config list`.",
-            )
 
-    @contextlib.contextmanager
-    def context(self, op: str, attr: str, value: Optional[str], verbose: bool = False):
-        # TODO: This is BS
-        is_group = "." not in attr
-        expr = "value" + "s" * is_group + f" {value!r}" * (value is not None)
-        try:
-            if verbose:
-                opt_type = "group" if is_group else "option"
-                op = op.capitalize()
-                print(f"{op}ting {expr} for config {opt_type} {attr!r}.....", end="")
-            yield
-            if verbose:
-                print("done.")
-        except PybmError as e:
-            if verbose:
-                print("failed.")
-            raise e
+        self.parser.add_argument(
+            "--global",
+            action="store_true",
+            default=False,
+            dest="useglobal",
+            help="Use the global config instead of the local one.",
+        )
 
-    def get(self, options: argparse.Namespace) -> int:
-        verbose: bool = options.verbose
+    @staticmethod
+    def get(options: argparse.Namespace) -> int:
         attr: str = options.option
+        path = GLOBAL_CONFIG if options.useglobal else LOCAL_CONFIG
 
-        with self.context("get", attr, None, verbose):
-            value = PybmConfig.load().get_value(attr)
+        value = PybmConfig.load(path).get_value(attr)
+
+        if value is None:
+            return ERROR
 
         if is_dataclass(value):
             print(toml.dumps({attr: asdict(value)}))
@@ -92,19 +69,28 @@ class ConfigCommand(CLICommand):
 
         return SUCCESS
 
-    def set(self, options: argparse.Namespace) -> int:
-        verbose: bool = options.verbose
-
+    @staticmethod
+    def set(options: argparse.Namespace) -> int:
         attr, value = str(options.option), str(options.value)
+        useglobal: bool = options.useglobal
+        path = Path(GLOBAL_CONFIG if useglobal else LOCAL_CONFIG)
 
-        with self.context("set", attr, value, verbose):
-            PybmConfig.load().set_value(attr, value).save()
+        if useglobal and not Path(GLOBAL_CONFIG).exists():
+            # to set the first global value, initialize with an empty dict
+            cfg = PybmConfig.from_dict({})
+        else:
+            cfg = PybmConfig.load(path)
+
+        cfg.set_value(attr, value)
+        cfg.save(path)
 
         return SUCCESS
 
     @staticmethod
     def list(options: argparse.Namespace) -> int:
-        config = PybmConfig.load(".pybm/config.toml")
+        path = GLOBAL_CONFIG if options.useglobal else LOCAL_CONFIG
+
+        config = PybmConfig.load(path)
 
         print(config.to_string())
 
@@ -113,14 +99,14 @@ class ConfigCommand(CLICommand):
     @staticmethod
     def describe(options: argparse.Namespace) -> int:
         attr: str = options.option
+        path = GLOBAL_CONFIG if options.useglobal else LOCAL_CONFIG
 
         if attr.startswith("_"):
             raise PybmError(
-                "Private configuration attributes cannot "
-                "be described via `pybm config describe`."
+                "Private attributes cannot be accessed via `pybm config describe`."
             )
 
-        PybmConfig.load().describe(attr)
+        PybmConfig.load(path).describe(attr)
 
         return SUCCESS
 
@@ -145,7 +131,7 @@ class ConfigCommand(CLICommand):
         # https://docs.python.org/3/library/argparse.html#arguments-containing
         if subcommand == "set":
             # Insert the double hyphen after flags, otherwise they break
-            flag_names = ["-h", "--help", "-v"]
+            flag_names = ["-h", "--help", "-v", "--global"]
             flags, values = lpartition(lambda x: x in flag_names, args)
             options = self.parser.parse_args(flags + ["--"] + values)
         else:

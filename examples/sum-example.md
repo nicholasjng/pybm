@@ -184,14 +184,12 @@ benchmark->save-results kind of workflow, we obtained all the results we need in
 ## And finally... the numbers
 
 Lastly, we need to check how big our improvements actually are (or rather, if we have achieved any in the first place!).
-This is handled by the
-`pybm compare` command, which compares all measured results to a "frame of reference"
-branch, which is taken to be the baseline for performance comparisons. In our case, that is our fictitious math
-library's current
-`master`.
+This is handled by the `pybm compare` command, which compares all measured results to a "frame of reference" branch,
+which is taken to be the baseline for performance comparisons. In our case, that is our fictitious math library's
+current `master`.
 
 ```shell
-pybm compare latest master linear-time constant-time
+pybm compare master linear-time constant-time
 
  Benchmark Name      | Ref           | Wall Time (usec) | CPU Time (usec) | Δt_rel (master) | Speedup      | Iterations
 ---------------------+---------------+------------------+-----------------+-----------------+--------------+------------
@@ -200,10 +198,10 @@ pybm compare latest master linear-time constant-time
  benchmarks/sum.py:f | constant-time | 0.13             | 0.12            | -100.00%        | 10759575.02x | 2000000   
 ```
 
-And look here, instead of 10x-ing our previous algorithm like a normal engineer, we actually... 10-million-x-ed it.
+And look here, instead of 10x-ing our previous algorithm like a normal engineer, we actually 10-million-x-ed it.
 Great work! Our constant time algorithm is definitely ready for a pull request :-)
 
 These are of course video game numbers, obtained by algorithmic improvements. More common real-world examples would see
 improvements in the one-to-three digit percentage range, but the example you see above does happen from time to time.
 
-And with that, the first pybm tutorial is finished. I hope you enjoyed it, and catch you on the next one!
+And with that, the first `pybm` tutorial is finished. I hope you enjoyed it, and catch you on the next one!

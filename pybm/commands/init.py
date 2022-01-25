@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List
 
 from pybm.command import CLICommand
-from pybm.config import PybmConfig
+from pybm.config import PybmConfig, LOCAL_CONFIG, GLOBAL_CONFIG
 from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
 from pybm.status_codes import SUCCESS
@@ -16,21 +16,12 @@ class InitCommand(CLICommand):
     and an environment list into a directory.
     """
 
-    usage = "pybm init <config-dir> [<options>]\n"
+    usage = "pybm init [<options>]\n"
 
     def __init__(self):
         super(InitCommand, self).__init__(name="init")
 
     def add_arguments(self):
-        self.parser.add_argument(
-            "config_dir",
-            type=str,
-            nargs="?",
-            default=".pybm",
-            metavar="<config-dir>",
-            help="Directory in which to store the pybm configuration data.",
-        )
-
         self.parser.add_argument(
             "--rm",
             action="store_true",
@@ -45,9 +36,16 @@ class InitCommand(CLICommand):
             action="append",
             dest="overrides",
             help="Override a specific configuration setting with a custom value "
-            "for the new pybm configuration file. Supplied arguments need "
-            "to have the form 'key=value'. For a comprehensive list of "
-            "configuration options, run `pybm config list`.",
+            "for the new pybm configuration file. Supplied arguments need to have the "
+            "form 'key=value'. For a comprehensive list of configuration options, "
+            "run `pybm config list`.",
+        )
+        self.parser.add_argument(
+            "--skip-global",
+            action="store_true",
+            default=False,
+            help="Skip applying system-wide defaults set in the global config file to "
+            "the newly created pybm configuration.",
         )
 
     def run(self, args: List[str]) -> int:
@@ -56,6 +54,7 @@ class InitCommand(CLICommand):
         options = self.parser.parse_args(args)
 
         verbose: bool = options.verbose
+        skip_global: bool = options.skip_global
         overrides: List[str] = options.overrides or []
 
         if verbose:
@@ -66,7 +65,15 @@ class InitCommand(CLICommand):
                 "Cannot initialize pybm: current directory is not a git repository."
             )
 
-        config = PybmConfig()
+        local_config = PybmConfig()
+
+        if Path(GLOBAL_CONFIG).exists() and not skip_global:
+            global_config = PybmConfig.load(GLOBAL_CONFIG)
+            for k, v in global_config.items():
+                if v is not None:
+                    if verbose:
+                        print(f"Setting global config value {k} = {v}.")
+                    local_config.set_value(k, v)
 
         for override in overrides:
             try:
@@ -79,25 +86,27 @@ class InitCommand(CLICommand):
             if verbose:
                 print(f"Overriding config option {attr!r} with value {value!r}.")
 
-            config.set_value(attr, value)
+            local_config.set_value(attr, value)
 
-        config_dir = Path(options.config_dir)
-        config_dir.mkdir(parents=True, exist_ok=True)
-        config_path = config_dir / "config.toml"
+        for cfg in [GLOBAL_CONFIG, LOCAL_CONFIG]:
+            config_dir = Path(cfg).parent
+            config_dir.mkdir(parents=False, exist_ok=True)
 
         if options.remove_existing:
             for p in list_contents(config_dir, file_suffix=".toml", names_only=True):
                 (config_dir / p).unlink()
 
-        if config_path.exists():
+        if Path(LOCAL_CONFIG).exists():
             raise PybmError(
                 "Configuration file already exists. If you want to write a new "
-                "configuration file, use the '--rm' option to `pybm init`."
+                "configuration file, run `pybm init --rm`."
             )
-        else:
-            config.save(config_path)
 
-        env_store = EnvironmentStore(config=config, verbose=verbose, missing_ok=True)
+        local_config.save()
+
+        env_store = EnvironmentStore(
+            config=local_config, verbose=verbose, missing_ok=True
+        )
 
         env_store.sync()
 

@@ -28,7 +28,7 @@ class StateMixin:
             else:
                 return default
 
-    def set_value(self, attr: str, value: Any):
+    def set_value(self, attr: str, value: str):
         *keys, subkey = attr.split(".")
         obj: Any = self
 
@@ -47,6 +47,8 @@ class StateMixin:
 
     @staticmethod
     def canonicalize_type(obj, attr: str, value: str):
+        assert value is not None, "cannot set None config value"
+
         annotations = obj.__annotations__
 
         # if no annotation exists (this should not happen), interpret as string
@@ -70,9 +72,7 @@ class StateMixin:
 
         except ValueError:
             raise PybmError(
-                f"Configuration value {attr!r} of class "
-                f"{obj.__class__.__name__} has to be of type "
-                f"{target_type.__name__!r}, but the given "
-                f"value {value!r} could not be "
-                f"interpreted as such."
+                f"Configuration value {attr!r} of class {obj.__class__.__name__} has "
+                f"to be of type {target_type.__name__!r}, but the given value "
+                f"{value!r} could not be interpreted as such."
             )
