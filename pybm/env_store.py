@@ -8,7 +8,6 @@ import toml
 
 from pybm import PybmConfig
 from pybm.builders import BaseBuilder
-from pybm.builders.util import is_valid_venv
 from pybm.config import get_component_class, get_runner_requirements
 from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
@@ -254,9 +253,7 @@ class EnvironmentStore:
             for i, worktree in enumerate(self.git_worktree.list()):
                 venv_root = Path(worktree.root) / "venv"
 
-                if venv_root.exists() and is_valid_venv(
-                    venv_root, verbose=self.verbose
-                ):
+                if venv_root.exists():
                     python_spec = self.builder.link(venv_root, verbose=self.verbose)
                 else:
                     # TODO: Enable auto-grabbing from venv home

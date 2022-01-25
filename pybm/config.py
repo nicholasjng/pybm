@@ -1,6 +1,10 @@
+import itertools
+import os
 from dataclasses import dataclass, asdict
 from pathlib import Path
-from typing import Union, Dict, List, TYPE_CHECKING
+from typing import Union, Dict, List, Any, MutableMapping, TYPE_CHECKING, Iterable
+
+from pybm.status_codes import ERROR
 
 if TYPE_CHECKING:
     # Literal exists only from Python 3.8 onwards
@@ -19,11 +23,17 @@ __all__ = [
     "PybmConfig",
     "get_component_class",
     "get_runner_requirements",
+    "LOCAL_CONFIG",
+    "GLOBAL_CONFIG",
 ]
 
-Descriptions = Dict[str, str]
+CONFIG_NAME = "config.toml"
+LOCAL_CONFIG = str(Path(".pybm") / CONFIG_NAME)
 
-CONFIG = ".pybm/config.toml"
+if os.name == "nt":
+    GLOBAL_CONFIG = str(Path(os.getenv("APPDATA", "")) / "pybm" / CONFIG_NAME)
+else:
+    GLOBAL_CONFIG = str(Path(os.getenv("HOME", "")) / ".config" / "pybm" / CONFIG_NAME)
 
 
 @dataclass
@@ -36,6 +46,9 @@ class PybmConfig(StateMixin):
 
     def describe(self, attr):
         current = self.get_value(attr)
+        if current is None:
+            return ERROR
+
         group, name = attr.split(".")
         annotations: Dict[str, type] = self.get_value(group + ".__annotations__")
         value_type = annotations[name].__name__
@@ -43,72 +56,83 @@ class PybmConfig(StateMixin):
         print(f"Describing configuration option {attr!r}.")
         print(f"Value type: {value_type}")
         print(f"Current value: {current!r}")
-        print(
-            description_db[group].get(
-                name, f"No description available for {group} option {name!r}."
-            )
+        print(description_db[group][name])
+
+    @classmethod
+    def from_dict(cls, config_obj: MutableMapping[str, Any], fill_value: Any = None):
+        init_dict = {}
+
+        for name, cfg_class in cls.__annotations__.items():
+            config_keys = cfg_class.__annotations__.keys()
+            cfg_dict = dict(zip(config_keys, [fill_value] * len(config_keys)))
+
+            if name in config_obj:
+                cfg_dict.update(config_obj[name])
+
+            init_dict[name] = cfg_class(**cfg_dict)
+
+        return cls(**init_dict)
+
+    def items(self):
+        return zip(self.keys(), self.values())
+
+    def keys(self):
+        def prepend_key(key: str, values: Iterable[str]):
+            return map(lambda value: key + "." + value, values)
+
+        return itertools.chain(
+            *(prepend_key(k, asdict(v).keys()) for k, v in self.__dict__.items())
         )
 
     @classmethod
-    def load(cls, path: Union[str, Path] = CONFIG):
-        if isinstance(path, str):
-            path = Path(path)
+    def load(cls, path: Union[str, Path] = LOCAL_CONFIG):
+        path = Path(path)
 
-        if not path.exists() or not path.is_file():
-            raise PybmError(
-                f"Configuration file {path} does not exist. "
-                f"Make sure to run `pybm init` before using pybm "
-                f"to set up environments or run benchmarks."
-            )
+        if not path.exists():
+            msg = f"Configuration file {str(path)!r} does not exist."
+
+            if str(path) == LOCAL_CONFIG:
+                msg += "Make sure to run `pybm init` to initialize pybm before use."
+            raise PybmError(msg)
 
         with open(path, "r") as config_file:
-            cfg = toml.load(config_file)
+            config_obj = toml.load(config_file)
 
-        return PybmConfig(
-            core=CoreGroup(**cfg["core"]),
-            git=GitGroup(**cfg["git"]),
-            runner=RunnerGroup(**cfg["runner"]),
-            builder=BuilderGroup(**cfg["builder"]),
-            reporter=ReporterGroup(**cfg["reporter"]),
-        )
+        return cls.from_dict(config_obj)
 
-    def save(self, path: Union[str, Path] = CONFIG):
+    def save(self, path: Union[str, Path] = LOCAL_CONFIG):
         with open(path, "w") as config_file:
             toml.dump(self.to_dict(), config_file)
 
-    def to_dict(self):
-        return {
-            "core": asdict(self.core),
-            "git": asdict(self.git),
-            "runner": asdict(self.runner),
-            "builder": asdict(self.builder),
-            "reporter": asdict(self.reporter),
-        }
+    def to_dict(self) -> MutableMapping[str, Any]:
+        return {k: asdict(v) for k, v in self.__dict__.items()}
 
     def to_string(self):
         return toml.dumps(self.to_dict())
+
+    def values(self):
+        return itertools.chain(*(asdict(v).values() for v in self.__dict__.values()))
 
 
 def get_component_class(
     kind: 'Literal["builder", "reporter", "runner"]', config: PybmConfig
 ):
-    class_name = import_from_module(config.get_value(f"{kind}.name"))
-    return class_name(config)
+    cls = import_from_module(config.get_value(f"{kind}.name"))
+    return cls(config)
 
 
 def get_runner_requirements(config: PybmConfig) -> List[str]:
     return get_component_class("runner", config).required_packages
 
 
-description_db: Dict[str, Descriptions] = {
+description_db: Dict[str, Dict[str, str]] = {
     "core": {
         "datefmt": "Datetime format string used to format timestamps for environment "
         "creation and modification. For a comprehensive list of identifiers and "
         "options, check the standard library documentation on datetime.strftime: "
         "https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior.",
         "loglevel": "Default level to be used in pybm logging.",
-        "logfile": "Name of the log file to write debug logs to, like `pip "
-        "install` or `git worktree` command outputs.",
+        "logfile": "Name of the log file to write debug logs to.",
         "logfmt": "Formatter string used to format logs in pybm. "
         "For a comprehensive list of identifiers and options, check the "
         "Python standard library documentation on logging formatters: "
@@ -122,8 +146,8 @@ description_db: Dict[str, Descriptions] = {
         "legacycheckout": "Whether to use the `git checkout <ref> -- <source>` "
         "command to source benchmark files from another ref instead of `git "
         "restore --source <ref> <source>`. The latter command is better suited for "
-        "this purpose, but requires at minimum git 2.23. Setting this option to 'true' "
-        "allows the use of older git versions for this purpose.",
+        "this purpose, but requires at minimum git version 2.23. Setting this option "
+        "to 'true' allows the use of older git versions for this purpose.",
     },
     "builder": {
         "name": "Name of the builder class used in pybm to manage "
@@ -150,18 +174,15 @@ description_db: Dict[str, Descriptions] = {
         "`pybm env create` call.",
     },
     "runner": {
-        "name": "Name of the runner class used in pybm to run "
-        "benchmarks inside Python virtual environments. If you "
-        "want to supply your own custom runner class, set this "
-        "value to your custom subclass of pybm.runners.BaseRunner.",
+        "name": "Name of the runner class used in pybm to run benchmarks inside Python "
+        "virtual environments. If you want to supply your own custom runner class, set "
+        "this value to your custom subclass of pybm.runners.BaseRunner.",
         "failfast": "Whether to abort the benchmark process prematurely on the first "
         "encountered exception instead of continuing until completion.",
         "contextproviders": "A colon-separated list of context provider functions. "
-        "In pybm benchmarks, context can be specified to include "
-        "additional information in the resulting JSON files. "
-        "A context provider function in pybm takes no arguments "
-        "and returns two string values, which are used as key "
-        "and value for the benchmark context object.",
+        "In pybm benchmarks, context can be given to include additional information in "
+        "the resulting JSON files. A context provider in pybm takes no arguments and "
+        "returns two strings used as key and value for the benchmark context object.",
     },
     "reporter": {
         "name": "Name of the reporter class used in pybm to report and compare "

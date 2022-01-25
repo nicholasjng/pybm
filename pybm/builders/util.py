@@ -82,7 +82,7 @@ def is_valid_venv(path: Union[str, Path], verbose: bool = False) -> bool:
         return False
 
     if verbose:
-        print("successful.")
+        print("success.")
     return True
 
 

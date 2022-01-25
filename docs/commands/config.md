@@ -52,6 +52,7 @@ resultdir = "results"
 
 [git]
 basedir = ".."
+legacycheckout = false
 
 [runner]
 name = "pybm.runners.TimeitRunner"
@@ -70,8 +71,6 @@ pipuninstalloptions = ""
 name = "pybm.reporters.ConsoleReporter"
 timeunit = "usec"
 significantdigits = 2
-
-
 ```
 
 ## `pybm config describe`
@@ -82,7 +81,12 @@ type, its current value, and a small help text:
 ```shell
 ➜ pybm config describe runner.name
 Describing configuration option 'runner.name'.
-Value type:    str
+Value type: str
 Current value: 'pybm.runners.TimeitRunner'
 Name of the runner class used in pybm to run benchmarks inside Python virtual environments. If you want to supply your own custom runner class, set this value to your custom subclass of pybm.runners.BaseRunner.
 ```
+
+## Working with the global config
+
+All the above methods can be used to manage a global configuration file as well, which can be used to set system-wide 
+defaults. To do this, simply supply the `--global` switch to any of the above commands.

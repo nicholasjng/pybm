@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, is_dataclass
 from typing import List, Optional, Dict, Any, Tuple
 
 from pybm.exceptions import GitError
@@ -88,20 +88,16 @@ class BenchmarkEnvironment(StateMixin):
 
     def to_dict(self):
         return {
-            "name": self.name,
-            "worktree": asdict(self.worktree),
-            "python": asdict(self.python),
-            "created": self.created,
-            "lastmod": self.lastmod,
+            k: asdict(v) if is_dataclass(v) else v for k, v in self.__dict__.items()
         }
 
 
 @dataclass
 class CoreGroup:
-    datefmt: str = "%d/%m/%Y, %H:%M:%S"
+    datefmt: str = "%d/%m/%Y %H:%M:%S"
     envfile: str = ".pybm/envs.toml"
     logfile: str = "logs/logs.txt"
-    logfmt: str = "%(asctime)s — %(name)-12s " "— %(levelname)s — %(message)s"
+    logfmt: str = "%(asctime)s — %(name)-12s — %(levelname)s — %(message)s"
     loglevel: int = logging.DEBUG
     resultdir: str = "results"
 
