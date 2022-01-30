@@ -53,6 +53,7 @@ class BaseBuilder:
         self,
         spec: PythonSpec,
         packages: List[str],
+        requirements_file: Optional[str] = None,
         options: Optional[List[str]] = None,
         verbose: bool = False,
     ) -> None:

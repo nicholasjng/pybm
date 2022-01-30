@@ -55,14 +55,14 @@ def pip_context(
         into_or_from = "into" if action == "install" else "from"
         print(
             f"{action.capitalize()}ing packages {resource} {into_or_from} virtual "
-            f"environment in location {directory}.....",
+            f"environment in location {str(directory)}.....",
             end="",
         )
         yield
         print("done.")
         print(
             f"Successfully {action}ed packages {resource} {into_or_from} virtual "
-            f"environment in location {directory}."
+            f"environment in location {str(directory)}."
         )
     except BuilderError as e:
         print("failed.")
@@ -106,19 +106,18 @@ class VenvBuilder(BaseBuilder):
                     "flags": "--python",
                     "type": str,
                     "default": sys.executable,
-                    "dest": "python_executable",
-                    "help": "Python interpreter to use in "
-                    "virtual environment construction.",
+                    "dest": "executable",
+                    "help": "Python interpreter to use in virtual environment "
+                    "construction.",
                     "metavar": "<python>",
                 },
                 {
                     "flags": "--venv-options",
                     "nargs": "*",
                     "default": None,
-                    "help": "Space-separated list of command "
-                    "line options for virtual "
-                    "environment creation using venv. "
-                    "To get a comprehensive list of "
+                    "dest": "options",
+                    "help": "Space-separated list of command line options for virtual "
+                    "environment creation using venv. To get a comprehensive list of "
                     "options, run `python -m venv -h`.",
                     "metavar": "<options>",
                 },
@@ -132,21 +131,17 @@ class VenvBuilder(BaseBuilder):
                     "default": None,
                     "metavar": "<requirements>",
                     "dest": "requirements_file",
-                    "help": "Requirements file for dependency "
-                    "installation in the newly created "
-                    "virtual environment.",
+                    "help": "Requirements file for dependency installation in the "
+                    "newly created virtual environment.",
                 },
                 {
                     "flags": "--pip-options",
                     "nargs": "*",
                     "default": None,
-                    "help": "Space-separated list of command "
-                    "line options for dependency "
-                    "installation in the created"
-                    "virtual environment using "
-                    "`pip install`. To get a "
-                    "comprehensive list of options, "
-                    "run `python -m pip install -h`.",
+                    "help": "Space-separated list of command line options for "
+                    "dependency installation in the created virtual environment using "
+                    "`pip install`. To get a comprehensive list of options, run "
+                    "`python -m pip install -h`.",
                     "metavar": "<options>",
                 },
             ]
@@ -158,20 +153,17 @@ class VenvBuilder(BaseBuilder):
                     "default": None,
                     "metavar": "<requirements>",
                     "dest": "requirements_file",
-                    "help": "Requirements file containing dependencies to "
-                    "uninstall from the chosen virtual environment.",
+                    "help": "Requirements file containing dependencies to uninstall "
+                    "from the chosen virtual environment.",
                 },
                 {
                     "flags": "--pip-options",
                     "nargs": "*",
                     "default": None,
-                    "help": "Space-separated list of command "
-                    "line options for dependency "
-                    "removal in the benchmark "
-                    "environment using "
-                    "`pip uninstall`. To get a "
-                    "comprehensive list of options, "
-                    "run `python -m pip uninstall -h`.",
+                    "help": "Space-separated list of command line options for "
+                    "dependency removal in the benchmark environment using "
+                    "`pip uninstall`. To get a comprehensive list of options, run "
+                    "`python -m pip uninstall -h`.",
                     "metavar": "<options>",
                 },
             ]
@@ -223,14 +215,12 @@ class VenvBuilder(BaseBuilder):
         path = Path(env_dir)
         if not path.exists() or not path.is_dir():
             raise BuilderError(
-                f"No virtual environment found at location "
-                f"{env_dir}: Location does not exist or is "
-                f"not a directory."
+                f"No virtual environment found at location {env_dir}: Location does "
+                f"not exist or is not a directory."
             )
         elif not builder_util.is_valid_venv(path):
             raise BuilderError(
-                f"Given directory {env_dir} was not recognized "
-                f"as a valid virtual environment."
+                f"Given directory {env_dir} is not a valid virtual environment."
             )
 
         with action_context("remove", directory=env_dir):
@@ -251,21 +241,7 @@ class VenvBuilder(BaseBuilder):
         if packages is not None:
             command += packages
         elif requirements_file is not None:
-            req_path = Path(requirements_file)
-
-            if not req_path.exists() or not req_path.is_file():
-                raise BuilderError(
-                    f"File {requirements_file!r} does not "
-                    f"exist or was not recognized as a file."
-                )
-
             command += ["-r", requirements_file]
-        else:
-            raise BuilderError(
-                "Either a package list or a requirements "
-                "file need to be specified to the install "
-                "command."
-            )
 
         options += self.pip_install_options
         options += [f"--find-links={loc}" for loc in self.wheel_caches]
@@ -285,9 +261,9 @@ class VenvBuilder(BaseBuilder):
             path = Path(env_dir)
         if not builder_util.is_valid_venv(path, verbose=verbose):
             msg = (
-                f"The specified path {env_dir} was not recognized "
-                f"as a valid virtual environment, since no `python`/"
-                f"`pip` executables or symlinks were discovered."
+                f"The specified path {str(env_dir)} was not recognized as a valid "
+                f"virtual environment, since no `python`/`pip` executables or symlinks "
+                f"were discovered."
             )
             raise BuilderError(msg)
 
@@ -318,6 +294,7 @@ class VenvBuilder(BaseBuilder):
         self,
         spec: PythonSpec,
         packages: List[str],
+        requirements_file: Optional[str] = None,
         pip_options: Optional[List[str]] = None,
         verbose: bool = False,
     ) -> None:

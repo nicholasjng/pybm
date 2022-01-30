@@ -214,7 +214,7 @@ class ConsoleReporter(BaseReporter):
                 "default": None,
                 "metavar": "<regex>",
                 "help": "Regex filter to selectively filter benchmark target files. "
-                "If specified, only benchmark files matching the given filter will be "
+                "If specified, only benchmark files matching the given regex will be "
                 "included in the report.",
             },
             {
@@ -224,7 +224,7 @@ class ConsoleReporter(BaseReporter):
                 "metavar": "<regex>",
                 "help": "Regex filter to selectively report benchmarks from the "
                 "matched target files. If specified, only benchmarks matching the "
-                "given filter will be included in the report.",
+                "given regex will be included in the report.",
             },
             {
                 "flags": "--context-filter",
@@ -232,8 +232,8 @@ class ConsoleReporter(BaseReporter):
                 "default": None,
                 "metavar": "<regex>",
                 "help": "Regex filter for additional context to report from the "
-                "benchmarks. If specified, only context values matching the given "
-                "context filter will be included in the report.",
+                "benchmarks. If specified, context values matching the given "
+                "regex will be included in the report.",
             },
         ]
         return args
