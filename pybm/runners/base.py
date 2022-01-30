@@ -5,7 +5,7 @@ import argparse
 import pybm.runners.util as runner_util
 from pybm import PybmConfig
 from pybm.exceptions import PybmError
-from pybm.specs import BenchmarkEnvironment
+from pybm.specs import BenchmarkEnvironment, Package
 from pybm.util.common import lmap
 from pybm.util.imports import convert_to_module_name
 from pybm.util.subprocess import run_subprocess
@@ -23,7 +23,9 @@ class BaseRunner:
         self.prefix = "--benchmark"
 
         # required packages for the runner
-        self.required_packages: List[str] = ["pybm"]
+        self._required: List[Package] = [
+            Package(name="pybm", origin="git+https://github.com/nicholasjng/pybm")
+        ]
 
         # result saving directory; create if non-existent
         self.result_dir: str = config.get_value("core.resultdir")
@@ -45,29 +47,18 @@ class BaseRunner:
         installed = environment.get_value("python.packages")
         names_and_versions = dict(lmap(lambda x: x.split("=="), installed))
 
-        for pkg in self.required_packages:
-            if "==" not in pkg:
-                name, version = pkg, ""
-            else:
-                name, version = pkg.split("==")
-
+        for package in self.required_packages:
+            name, version = package.name, package.version
             if name not in names_and_versions:
-                # TODO: Put packages as tuples (pkg_name, version, origin) to handle
-                #  non-PyPI package installation(s)
-                if name == "pybm":
-                    missing_pkgs.append("git+https://github.com/nicholasjng/pybm")
-                else:
-                    missing_pkgs.append(pkg)
-            else:
-                if version != "" and names_and_versions[name] != version:
-                    missing_pkgs.append(pkg)
+                missing_pkgs.append(str(package))
+            elif package.version is not None and names_and_versions[name] != version:
+                missing_pkgs.append(str(package))
 
         if len(missing_pkgs) > 0:
             raise PybmError(
-                f"Required packages {', '.join(missing_pkgs)} "
-                f"for runner {self.__class__.__name__} not "
-                f"installed in environment {environment.name!r}. "
-                f"To install them, run `pybm env install "
+                f"Required packages {', '.join(missing_pkgs)} for runner class "
+                f"pybm.runners.{self.__class__.__name__} not installed in environment "
+                f"{environment.name!r}. To install them, run `pybm env install "
                 f"{environment.name} {' '.join(missing_pkgs)}`."
             )
 
@@ -170,6 +161,10 @@ class BaseRunner:
             parser.add_argument(arg.pop("flags"), **arg)
 
         return parser.parse_args(flags)
+
+    @property
+    def required_packages(self) -> List[Package]:
+        return self._required
 
     def run_benchmark(
         self, argv: Optional[List[str]] = None, module_context: Dict[str, Any] = None
