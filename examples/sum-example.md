@@ -146,7 +146,7 @@ def f():
 
 
 if __name__ == "__main__":
-    pybm.run(context=globals())
+    pybm.run(module_context=globals())
 ```
 
 The test file is very simple: We import our function `my_sum`, sum up all numbers from 1 to 10000, and run the benchmark
