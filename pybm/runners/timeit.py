@@ -1,3 +1,4 @@
+import copy
 import json
 import sys
 import time
@@ -6,7 +7,6 @@ from typing import List, Any, Dict, Optional
 from contextlib import redirect_stdout
 
 import pybm.runners.util as runner_util
-from pybm import PybmError
 from pybm.config import PybmConfig
 from pybm.runners.base import BaseRunner
 from pybm.status_codes import SUCCESS
@@ -46,12 +46,7 @@ class TimeitRunner(BaseRunner):
         module_context: Optional[Dict[str, Any]] = None,
     ) -> int:
 
-        if module_context is None:
-            raise PybmError(
-                "Missing module context. Please specify a context for "
-                "benchmark execution (the easiest way to do this is by "
-                "passing the globals() object)."
-            )
+        assert module_context is not None, "Module context is missing."
 
         argv = argv or sys.argv
         executable, *flags = argv
@@ -69,9 +64,8 @@ class TimeitRunner(BaseRunner):
 
         # valid timeit target <=> is function + takes no args
         module_targets = dfilter(is_valid_timeit_target, module_targets)
-        # TODO: Log warning about thrown away targets
 
-        repetitions: int = args.benchmark_repetitions
+        repeat: int = args.benchmark_repetitions
 
         benchmark_context: List[str] = args.benchmark_context or []
 
@@ -82,52 +76,48 @@ class TimeitRunner(BaseRunner):
 
         # TODO: Enable stdout redirect to logfile
         with redirect_stdout(None):
-            # TODO: Give option of aggregate-only reporting
-            for i in range(repetitions):
-                # TODO: Implement random interleaving option with permutations
-                for name in module_targets.keys():
-                    benchmark_obj: Dict[str, Any] = {
-                        "name": name,
-                        "repetitions": repetitions,
-                        "repetition_index": i,
-                    }
-                    # Source for import:
-                    # https://docs.python.org/3/library/timeit.html#examples
-                    t_real = timeit.Timer(
-                        stmt=f"{name}()",
-                        setup=f"from __main__ import {name}",
-                        timer=time.perf_counter,
-                    )
+            # TODO: Implement random interleaving option with permutations
+            for name in module_targets.keys():
+                benchmark_obj: Dict[str, Any] = {
+                    "name": name,
+                    "repetitions": repeat,
+                    "repetition_index": 0,
+                    "time_unit": "s",
+                    "iterations": 0,
+                }
+                # Source for import:
+                # https://docs.python.org/3/library/timeit.html#examples
+                t_real = timeit.Timer(
+                    stmt=f"{name}()",
+                    setup=f"from __main__ import {name}",
+                    timer=time.perf_counter,
+                )
 
-                    # Explanation of real vs. CPU time in python's 'time':
-                    # https://stackoverflow.com/questions/25785243/understanding-time-perf-counter-and-time-process-time
-                    t_cpu = timeit.Timer(
-                        stmt=f"{name}()",
-                        setup=f"from __main__ import {name}",
-                        timer=time.process_time,
-                    )
+                # Explanation of real vs. CPU time in python's 'time':
+                # https://stackoverflow.com/questions/25785243/understanding-time-perf-counter-and-time-process-time
+                t_cpu = timeit.Timer(
+                    stmt=f"{name}()",
+                    setup=f"from __main__ import {name}",
+                    timer=time.process_time,
+                )
 
-                    for t, ttype in [(t_real, "real_time"), (t_cpu, "cpu_time")]:
-                        number, _ = t.autorange(None)
+                for t, ttype in [(t_real, "real_time"), (t_cpu, "cpu_time")]:
+                    number, _ = t.autorange(None)
 
-                        # TODO: What if these are different?
-                        benchmark_obj["iterations"] = number
+                    # TODO: What if these are different?
+                    benchmark_obj["iterations"] = number
 
-                        # TODO: Give option to specify time unit
-                        benchmark_obj["time_unit"] = "s"
+                    benchmark_obj[ttype] = None
+                    results = t.repeat(repeat=repeat, number=number)
 
-                        # set repetitions to 1 here to be able to write the
-                        # resulting data to JSON
-                        benchmark_obj[ttype] = (
-                            min(t.repeat(repeat=1, number=number)) / number
-                        )
-
-                    benchmark_objects.append(benchmark_obj)
+                    for i, res in enumerate(results):
+                        benchmark_obj[ttype] = res / number
+                        benchmark_obj["repetition_index"] = i
+                        benchmark_objects.append(copy.copy(benchmark_obj))
 
             json_obj["benchmarks"] = benchmark_objects
 
-        # write the JSON object to stdout, to be caught by the subprocess
-        # started in the run command.
+        # write result to stdout, read from the subprocess dispatched in `pybm run`.
         sys.stdout.write(json.dumps(json_obj))
 
         return SUCCESS
