@@ -25,12 +25,9 @@ class CompareCommand(CLICommand):
             "refs",
             nargs="+",
             metavar="<refs>",
-            help="Benchmarked refs to compare. The first "
-            "given ref will be treated as the "
-            "anchor ref, relative to which all "
-            "differences are reported. An error is "
-            "raised if any of the given "
-            "refs are not present in the run.",
+            help="Benchmarked refs to compare. The first given ref is treated as the "
+            "anchor ref, relative to which all differences are reported. An error is "
+            "raised if any of the given refs are not present in the run.",
         )
 
         # optionals

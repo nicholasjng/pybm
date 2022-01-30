@@ -28,23 +28,19 @@ class RunCommand(CLICommand):
         self.parser.add_argument(
             "benchmarks",
             type=str,
-            help="Name of the benchmark target(s) to "
-            "run. Can be a path to a single file, "
-            "a directory, or a glob expression. "
-            "Given paths need to be relative to the worktree root.",
+            help="Name of the benchmark target(s) to run. Can be a path to a single "
+            "file, a directory, or a glob expression. Given paths need to be relative "
+            "to the worktree root.",
             metavar="<benchmark>",
         )
         self.parser.add_argument(
             "environments",
             nargs="*",
             default=None,
-            help="Environments to run the benchmarks "
-            "in. If omitted, by default, "
-            "benchmarks will be run in the "
-            "main environment if only one "
-            "environment exists, otherwise an "
-            "error will be raised, unless the "
-            '"--all" switch is used.',
+            help="Environments to run the benchmarks in. If omitted, by default, "
+            "benchmarks will be run in the main environment if only one environment "
+            "exists, otherwise an error will be raised, unless the '--all' switch is "
+            "used.",
             metavar="<environment(s)>",
         )
         self.parser.add_argument(
@@ -52,17 +48,16 @@ class RunCommand(CLICommand):
             action="store_true",
             default=False,
             dest="run_as_module",
-            help="Run benchmark targets as modules. "
-            "Use this to benchmark code outside of a package.",
+            help="Run benchmark targets as modules. Use this to benchmark code outside "
+            "of a package.",
         )
         self.parser.add_argument(
             "--checkout",
             action="store_true",
             default=False,
-            help="Run benchmarks in checkout mode in "
-            'environment "root". Here, instead of '
-            "persisted git worktrees, different refs "
-            "are benchmarked using `git checkout` commands.",
+            help="Run benchmarks in checkout mode in environment 'root'. Here, instead "
+            "of persisted git worktrees, different refs are benchmarked using "
+            "`git checkout` commands.",
         )
         self.parser.add_argument(
             "--all",
@@ -93,8 +88,8 @@ class RunCommand(CLICommand):
             default=None,
             dest="benchmark_filter",
             metavar="<regex>",
-            help="Regular expression to selectively "
-            "filter benchmarks by name in the target files.",
+            help="Regular expression to selectively filter benchmarks by name in the "
+            "target files.",
         )
         self.parser.add_argument(
             "--context",
@@ -102,12 +97,9 @@ class RunCommand(CLICommand):
             default=None,
             dest="benchmark_context",
             metavar="<context>",
-            help="Additional global context, given "
-            "as strings in the format"
-            "--context='key'='value'. Keys must be "
-            "unique, supplying two or more "
-            "context values for the same key "
-            "results in an error.",
+            help="Additional global context, given as strings in the format "
+            "--context='key'='value'. Keys must be unique. Supplying two or more "
+            "context values for the same key results in an error.",
         )
 
         runner: BaseRunner = get_component_class("runner", config=self.config)

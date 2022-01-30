@@ -51,7 +51,7 @@ class EnvironmentStore:
 
         # relevant config attributes
         self.env_file = Path(self.config.get_value("core.envfile"))
-        self.fmt = self.config.get_value("core.datefmt")
+        self.datefmt = self.config.get_value("core.datefmt")
 
         # attributes controlling print behavior
         self.verbose = verbose
@@ -65,10 +65,9 @@ class EnvironmentStore:
         if not self.env_file.exists():
             if not self.missing_ok:
                 print(
-                    "Warning: No environment configuration file found. "
-                    "To create a configuration file and discover "
-                    "existing environments, run `pybm init` "
-                    "from the root of your git repository."
+                    "Warning: No environment configuration file found. To create a "
+                    "configuration file and discover existing environments, run `pybm "
+                    "init` from the root of your git repository."
                 )
         else:
             if self.verbose:
@@ -135,21 +134,24 @@ class EnvironmentStore:
 
             ctx.callback(cleanup_venv, self.builder, worktree, python_spec)
 
-            # install runner requirements
-            self.builder.install(
-                spec=python_spec,
-                packages=get_runner_requirements(config=self.config),
-                verbose=self.verbose,
-            )
+            install_runner: bool = self.config.get_value("builder.autoinstall")
+
+            if install_runner:
+                # install runner requirements
+                self.builder.install(
+                    spec=python_spec,
+                    packages=get_runner_requirements(config=self.config),
+                    verbose=self.verbose,
+                )
 
             if worktree is not None and python_spec is not None:
-                # pop all cleanups and re-push env YAML save
+                # pop all cleanups and re-push env save
                 ctx.pop_all()
                 ctx.callback(self.save)
 
             name = name or f"env_{len(self.environments) + 1}"
 
-            created = datetime.now().strftime(self.fmt)
+            created = datetime.now().strftime(self.datefmt)
 
             environment = BenchmarkEnvironment(
                 name=name,
@@ -259,7 +261,7 @@ class EnvironmentStore:
                     # TODO: Enable auto-grabbing from venv home
                     python_spec = self.builder.create(sys.executable, venv_root)
 
-                created = datetime.now().strftime(self.fmt)
+                created = datetime.now().strftime(self.datefmt)
 
                 name = "root" if is_main_worktree(worktree.root) else f"env_{i + 1}"
 
@@ -291,5 +293,6 @@ class EnvironmentStore:
             )
 
             env.worktree = worktree
+            env.lastmod = datetime.now().strftime(self.datefmt)
 
         return env

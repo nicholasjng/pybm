@@ -1,4 +1,5 @@
 import argparse
+from contextlib import ExitStack
 from typing import List, Callable, Mapping, Optional
 
 from pybm.builders import BaseBuilder
@@ -46,18 +47,15 @@ class EnvCommand(CLICommand):
                 metavar="<name>",
                 nargs="?",
                 default=None,
-                help="Unique name for the created "
-                "environment. Can be used to "
-                "reference environments from "
-                "the command line.",
+                help="Unique name for the created environment. Can be used to "
+                "reference environments from the command line.",
             )
             self.parser.add_argument(
                 "destination",
                 metavar="<dest>",
                 nargs="?",
                 default=None,
-                help="Destination directory of "
-                "the new worktree. Defaults to "
+                help="Destination directory of the new worktree. Defaults to "
                 "repository-name@{commit|branch|tag}.",
             )
             self.parser.add_argument(
@@ -65,29 +63,23 @@ class EnvCommand(CLICommand):
                 "--force",
                 action="store_true",
                 default=False,
-                help="Force worktree creation. Useful "
-                "for checking out a branch "
-                "multiple times with different "
-                "custom requirements.",
+                help="Force worktree creation. Useful for checking out a branch "
+                "multiple times with different custom requirements.",
             )
             self.parser.add_argument(
                 "-R",
                 "--resolve-commits",
                 action="store_true",
                 default=False,
-                help="Always resolve the given git "
-                "ref to its associated commit. "
-                "If the given ref is a branch "
-                "name, this detaches the HEAD "
-                "(see https://git-scm.com/docs/"
-                "git-checkout#_detached_head).",
+                help="Always resolve the given git ref to its associated commit. "
+                "If the given ref is a branch name, this detaches the HEAD "
+                "(see https://git-scm.com/docs/git-checkout#_detached_head).",
             )
             self.parser.add_argument(
                 "--no-checkout",
                 action="store_true",
                 default=False,
-                help="Skip worktree checkout after "
-                "creation. Useful for sparsely "
+                help="Skip worktree checkout after creation. Useful for sparsely "
                 "checking out branches.",
             )
             self.parser.add_argument(
@@ -97,30 +89,23 @@ class EnvCommand(CLICommand):
                 default=None,
                 dest="link_dir",
                 metavar="<path-to-venv>",
-                help="Link an existing Python virtual "
-                "environment to the created pybm "
-                "environment. Raises an error if "
-                "the path does not exist or is not "
-                "recognized as a valid Python "
-                "virtual environment.",
+                help="Link an existing Python virtual environment to the created pybm "
+                "environment. Raises an error if the path does not exist or is not "
+                "recognized as a valid Python virtual environment.",
             )
         elif subcommand in ["delete", "install", "uninstall"]:
             self.parser.add_argument(
                 "identifier",
                 metavar="<id>",
-                help="Information that uniquely "
-                "identifies the environment. "
-                "Can be name, checked out "
-                "commit/branch/tag name, "
-                "or worktree root directory.",
+                help="Information that uniquely identifies the environment. "
+                "Can be name, checked out commit/branch/tag, or worktree directory.",
             )
             if subcommand == "delete":
                 self.parser.add_argument(
                     "-f",
                     "--force",
                     action="store_true",
-                    help="Force worktree removal, "
-                    "including untracked files and changes.",
+                    help="Force worktree removal, including untracked files.",
                 )
             else:
                 self.parser.add_argument(
@@ -128,8 +113,8 @@ class EnvCommand(CLICommand):
                     nargs="*",
                     default=None,
                     metavar="<packages>",
-                    help="Package dependencies to install "
-                    "into the new virtual environment.",
+                    help="Package dependencies to install into the new virtual "
+                    "environment.",
                 )
         elif subcommand == "list":
             pass
@@ -217,9 +202,14 @@ class EnvCommand(CLICommand):
 
         target_env = env_store.get(identifier)
 
-        builder.install(
-            spec=target_env.python, packages=packages, verbose=verbose, **option_dict
-        )
+        with ExitStack() as ctx:
+            ctx.callback(env_store.save)
+            builder.install(
+                spec=target_env.python,
+                packages=packages,
+                verbose=verbose,
+                **option_dict,
+            )
 
         return SUCCESS
 
@@ -240,9 +230,14 @@ class EnvCommand(CLICommand):
 
         target_env = env_store.get(identifier)
 
-        builder.uninstall(
-            spec=target_env.python, packages=packages, verbose=verbose, **option_dict
-        )
+        with ExitStack() as ctx:
+            ctx.callback(env_store.save)
+            builder.uninstall(
+                spec=target_env.python,
+                packages=packages,
+                verbose=verbose,
+                **option_dict,
+            )
 
         return SUCCESS
 

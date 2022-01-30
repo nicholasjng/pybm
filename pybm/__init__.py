@@ -18,12 +18,8 @@ def run(argv: Optional[List[str]] = None, module_context: Dict[str, Any] = None)
     """
     if module_context is None:
         raise PybmError(
-            "Context is missing. When running a benchmark on a "
-            "Python source file target, you need to pass the "
-            "target's __main__ context in order for the "
-            "benchmarks to be discovered correctly. You can do "
-            'this e.g. by passing "globals()" as a value for '
-            "the context object."
+            "Missing module context. Please pass a module context for the benchmark "
+            "(the easiest way to do this is by passing the globals() object)."
         )
     config_file = PybmConfig.load()
 
