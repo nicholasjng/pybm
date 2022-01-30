@@ -5,6 +5,7 @@ import pybm.runners.util as runner_util
 from pybm import PybmError
 from pybm.config import PybmConfig
 from pybm.runners.base import BaseRunner
+from pybm.specs import Package
 from pybm.util.common import lfilter
 from pybm.util.extras import get_extras
 
@@ -24,14 +25,13 @@ class GoogleBenchmarkRunner(BaseRunner):
     """
 
     def __init__(self, config: PybmConfig):
-        self.required_packages = get_extras()["gbm"]
         if not GBM_INSTALLED:
             raise PybmError(
                 "Missing dependencies. You attempted to use the "
                 "Google Benchmark runner without having the "
                 "required dependencies installed. To do so, "
                 "please run the command `pybm env install root "
-                f"{' '.join(self.required_packages)}` while "
+                f"{' '.join([str(p) for p in self.required_packages])}` while "
                 f"inside your root virtual environment.\n "
                 f"BEWARE: As of 10/2021, Google Benchmark does "
                 f"not have source wheels available for any "
@@ -52,20 +52,24 @@ class GoogleBenchmarkRunner(BaseRunner):
                 "flags": "--enable-random-interleaving",
                 "action": "store_true",
                 "default": False,
-                "help": "Whether to enable the random interleaving feature "
-                "in Google Benchmark. This can reduce run-to-run "
-                "variance by running benchmarks in random order.",
+                "help": "Whether to enable the random interleaving feature in Google "
+                "Benchmark. This can reduce run-to-run variance by running benchmarks "
+                "in random order.",
             },
             {
                 "flags": "--report-aggregates-only",
                 "action": "store_true",
                 "default": False,
-                "help": "Whether to report aggregates (mean/stddev) only "
-                "in Google Benchmark instead of the raw data. If you uncheck this "
-                "option, mean/median/stddev aggregates are still reported if the "
-                "number of repetitions is greater than 1.",
+                "help": "Whether to report aggregates (mean/stddev) only instead of "
+                "the raw data in Google Benchmark. If you uncheck this option, "
+                "mean/median/stddev aggregates are still reported if the number of "
+                "benchmark repetitions is greater than 1.",
             },
         ]
+
+    @property
+    def required_packages(self) -> List[Package]:
+        return get_extras()["gbm"]
 
     def run_benchmark(
         self, argv: Optional[List[str]] = None, module_context: Dict[str, Any] = None

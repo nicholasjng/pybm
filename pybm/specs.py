@@ -1,4 +1,5 @@
 import logging
+import typing
 from dataclasses import dataclass, field, asdict, is_dataclass
 from typing import List, Optional, Dict, Any, Tuple
 
@@ -6,6 +7,22 @@ from pybm.exceptions import GitError
 from pybm.mixins import StateMixin
 from pybm.util.git import map_commits_to_tags
 from pybm.util.subprocess import run_subprocess
+
+
+class Package(typing.NamedTuple):
+    name: str
+    version: Optional[str] = None
+    origin: Optional[str] = None
+
+    def __str__(self):
+        if self.version is not None and self.origin is None:
+            return self.name + "==" + self.version
+        elif self.version is not None and self.origin is not None:
+            return self.origin + "@" + self.version
+        elif self.version is None and self.origin is not None:
+            return self.origin
+        else:
+            return self.name
 
 
 @dataclass(frozen=True)
@@ -112,6 +129,7 @@ class GitGroup:
 class BuilderGroup:
     name: str = "pybm.builders.VenvBuilder"
     homedir: str = ""
+    autoinstall: bool = True
     wheelcaches: str = ""
     venvoptions: str = ""
     pipinstalloptions: str = ""
