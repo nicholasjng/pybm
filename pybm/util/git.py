@@ -19,7 +19,8 @@ git_subprocess = partial(run_subprocess, ex_type=GitError)
 
 def get_git_version() -> Tuple[int, ...]:
     rc, output = git_subprocess(["git", "--version"])
-    version_str = re.search(r"([\d.]+)", output)
+    # leading number(s), followed by multiple (dot + group of numbers) groups
+    version_str = re.search(r"\d+(\.\d+)+", output)
     if version_str is not None:
         version = version_str.group()
         return version_tuple(version)
@@ -27,8 +28,16 @@ def get_git_version() -> Tuple[int, ...]:
         raise GitError("Unable to get version from git.")
 
 
-# ---------------------------------------
+def get_main_worktree() -> Path:
+    # this gives the absolute location of the main git folder
+    command = ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]
+    rc, output = git_subprocess(command)
+    # ergo, parent folder is the target directory
+    return Path(output.rstrip()).parent
+
+
 # Current git version
+# ---------------------------------------
 try:
     GIT_VERSION = get_git_version()
 except GitError:
@@ -36,15 +45,15 @@ except GitError:
 # ---------------------------------------
 
 
-def _feature_guard(min_git: Tuple[int, int, int]):
+def _feature_guard(command: str, min_git: Tuple[int, int, int]):
     if GIT_VERSION < min_git:
         min_git_str = version_string(min_git)
-        msg = f"Command `git restore` requires at minimum git version {min_git_str}, "
+        msg = f"Command `git {command}` requires at minimum git version {min_git_str}, "
 
         if GIT_VERSION == (0, 0, 0):
             msg += (
-                "but no git installation was found on your system. "
-                "Please assure that git is installed and added to PATH."
+                "but no git installation was found on your system. Please ensure that "
+                "that git is installed and added to PATH."
             )
         else:
             curr_git_str = version_string(GIT_VERSION)
@@ -58,7 +67,7 @@ def is_git_worktree(path: Union[str, Path]) -> bool:
     # https://stackoverflow.com/questions/2180270/check-if-current-directory-is-a-git-repository
     cmd = ["git", "rev-parse", "--is-inside-work-tree"]
     # command exits with 1 if not inside a worktree
-    rc, _ = git_subprocess(cmd, allowed_statuscodes=[1], cwd=path)
+    rc, _ = git_subprocess(cmd, allowed_statuscodes=[1, 128], cwd=path)
     return rc == 0
 
 
@@ -193,9 +202,9 @@ def get_from_history(
         # https://stackoverflow.com/questions/307579/how-do-i-copy-a-version-of-a-single-file-from-one-git-branch-to-another
         command = ["git", "restore", "--source", ref, str(resource)]
 
-        _feature_guard(min_git=(2, 23, 0))
+        _feature_guard("restore", min_git=(2, 23, 0))
 
-    # errors caught here (e.g. nonexistent resource) are immediately raised
+    # errors here (e.g. nonexistent resource) are immediately raised
     git_subprocess(command=command, cwd=directory)
 
     if use_legacy_checkout:

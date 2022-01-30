@@ -196,12 +196,11 @@ class GitWorktreeWrapper:
             of_type = "switch" if offender.startswith("-") else "command"
 
             msg = (
-                f"Running the command `{' '.join(command)}` requires at "
-                f"minimum git version {minimum}, but your git version "
-                f"was found to be only {version_string(GIT_VERSION)}. "
-                f"This version requirement is because the {of_type} "
-                f"{offender!r} was used, which was first introduced in "
-                f"git version {minimum}."
+                f"Running the command `{' '.join(command)}` requires at minimum git "
+                f"version {minimum}, but your git version was found to be only "
+                f"{version_string(GIT_VERSION)}. This version requirement exists "
+                f"because the {of_type} {offender!r} was used, which was first "
+                f"introduced in git version {minimum}."
             )
 
             raise GitError(msg)
@@ -283,15 +282,15 @@ class GitWorktreeWrapper:
         if not attr:
             # TODO: Display close matches if present
             msg = (
-                f"Argument {info!r} was not recognized as an "
-                f"attribute of an existing worktree."
+                f"Argument {info!r} was not recognized as an attribute of an existing "
+                f"worktree."
             )
             raise GitError(msg)
 
         if verbose:
             print(
-                f"Given identifier {info!r} was determined to be "
-                f"the {attr!r} attribute of the desired worktree."
+                f"Given identifier {info!r} was determined to be the {attr!r} "
+                f"attribute of the desired worktree."
             )
 
         worktree = self.get_worktree_by_attr(attr, info, verbose=verbose)
@@ -322,9 +321,8 @@ class GitWorktreeWrapper:
 
         if ref_type not in ["commit", "branch", "tag"]:
             raise GitError(
-                f"Failed to switch checkout of worktree "
-                f"{abbrev_home(worktree.root)}: Object {ref!r} "
-                f"could not be understood as a valid git reference."
+                f"Failed to switch checkout of worktree {abbrev_home(worktree.root)}: "
+                f"Object {ref!r} could not be understood as a valid git reference."
             )
 
         checkout(ref=ref, cwd=worktree.root)

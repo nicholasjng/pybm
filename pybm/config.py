@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Union, Dict, List, Any, MutableMapping, TYPE_CHECKING, Iterable
 
 from pybm.status_codes import ERROR
+from pybm.util.common import lmap
+from pybm.util.git import get_main_worktree
 
 if TYPE_CHECKING:
     # Literal exists only from Python 3.8 onwards
@@ -16,7 +18,14 @@ import toml
 
 from pybm.exceptions import PybmError
 from pybm.mixins import StateMixin
-from pybm.specs import CoreGroup, BuilderGroup, RunnerGroup, GitGroup, ReporterGroup
+from pybm.specs import (
+    CoreGroup,
+    BuilderGroup,
+    RunnerGroup,
+    GitGroup,
+    ReporterGroup,
+    Package,
+)
 from pybm.util.imports import import_from_module
 
 __all__ = [
@@ -28,7 +37,7 @@ __all__ = [
 ]
 
 CONFIG_NAME = "config.toml"
-LOCAL_CONFIG = str(Path(".pybm") / CONFIG_NAME)
+LOCAL_CONFIG = str(get_main_worktree() / Path(".pybm") / CONFIG_NAME)
 
 if os.name == "nt":
     GLOBAL_CONFIG = str(Path(os.getenv("APPDATA", "")) / "pybm" / CONFIG_NAME)
@@ -122,7 +131,8 @@ def get_component_class(
 
 
 def get_runner_requirements(config: PybmConfig) -> List[str]:
-    return get_component_class("runner", config).required_packages
+    pkgs: List[Package] = get_component_class("runner", config).required_packages
+    return lmap(str, pkgs)
 
 
 description_db: Dict[str, Dict[str, str]] = {
@@ -157,6 +167,9 @@ description_db: Dict[str, Dict[str, str]] = {
         "The default for pybm is to create the virtual environment directly into the "
         "new git worktree, but you can also choose to link existing environments, "
         "which are assumed to be subdirectories of this location.",
+        "autoinstall": "Whether to install the configured benchmark runner's "
+        "dependencies immediately into a newly created virtual environment. Unset this "
+        "option for more granular control over the installation process.",
         "wheelcaches": "A string of local directories separated by colons (':'), like "
         "a Unix PATH variable, containing prebuilt wheels for Python packages. "
         "Set this if you request a package that has no wheels for your Python version "
