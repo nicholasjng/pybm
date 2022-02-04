@@ -14,7 +14,8 @@ def get_extras():
     extra_features = {
         "gbm": ["google_benchmark @ git+https://github.com/google/benchmark"]
     }
-    extra_features["all"] = sum(extra_features.values(), [])
+    start: List[str] = []
+    extra_features["all"] = sum(extra_features.values(), start)
     return extra_features
 
 
