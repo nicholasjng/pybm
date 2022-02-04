@@ -52,7 +52,7 @@ class BaseBuilder:
     def uninstall(
         self,
         spec: PythonSpec,
-        packages: List[str],
+        packages: Optional[List[str]] = None,
         requirements_file: Optional[str] = None,
         options: Optional[List[str]] = None,
         verbose: bool = False,

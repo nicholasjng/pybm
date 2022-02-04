@@ -72,8 +72,6 @@ class TimeitRunner(BaseRunner):
         # construct and fill context dictionary, add to JSON payload
         json_obj["context"] = self.make_context(benchmark_context)
 
-        benchmark_objects = []
-
         # TODO: Enable stdout redirect to logfile
         with redirect_stdout(None):
             # TODO: Implement random interleaving option with permutations
@@ -85,6 +83,10 @@ class TimeitRunner(BaseRunner):
                     "time_unit": "s",
                     "iterations": 0,
                 }
+
+                # explicit list comprehension to get unique object IDs
+                benchmarks = [copy.copy(benchmark_obj) for _ in range(repeat)]
+
                 # Source for import:
                 # https://docs.python.org/3/library/timeit.html#examples
                 t_real = timeit.Timer(
@@ -104,20 +106,17 @@ class TimeitRunner(BaseRunner):
                 for t, ttype in [(t_real, "real_time"), (t_cpu, "cpu_time")]:
                     number, _ = t.autorange(None)
 
-                    # TODO: What if these are different?
-                    benchmark_obj["iterations"] = number
-
-                    benchmark_obj[ttype] = None
                     results = t.repeat(repeat=repeat, number=number)
 
                     for i, res in enumerate(results):
-                        benchmark_obj[ttype] = res / number
-                        benchmark_obj["repetition_index"] = i
-                        benchmark_objects.append(copy.copy(benchmark_obj))
+                        bm = benchmarks[i]
+                        bm[ttype] = res / number
+                        bm["repetition_index"] = i
+                        bm["iterations"] = number
 
-            json_obj["benchmarks"] = benchmark_objects
+            json_obj["benchmarks"] = benchmarks
 
-        # write result to stdout, read from the subprocess dispatched in `pybm run`.
+        # write to stdout, to be read from the subprocess dispatched in `pybm run`.
         sys.stdout.write(json.dumps(json_obj))
 
         return SUCCESS

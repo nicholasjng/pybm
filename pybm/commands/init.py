@@ -7,7 +7,7 @@ from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
 from pybm.status_codes import SUCCESS
 from pybm.util.git import is_main_worktree
-from pybm.util.path import list_contents
+from pybm.util.path import get_filenames
 
 
 class InitCommand(CLICommand):
@@ -93,7 +93,7 @@ class InitCommand(CLICommand):
             config_dir.mkdir(parents=False, exist_ok=True)
 
         if options.remove_existing:
-            for p in list_contents(config_dir, file_suffix=".toml", names_only=True):
+            for p in get_filenames(config_dir, file_ext=".toml"):
                 (config_dir / p).unlink()
 
         if Path(LOCAL_CONFIG).exists():

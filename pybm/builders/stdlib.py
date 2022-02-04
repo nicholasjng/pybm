@@ -74,7 +74,7 @@ class VenvBuilder(BaseBuilder):
 
     def __init__(self, config: PybmConfig):
         super().__init__(config=config)
-        self.venv_home: str = config.get_value("builder.homedir")
+        self.venv_home: Path = Path(config.get_value("builder.homedir"))
 
         # persistent venv options
         self.venv_options: List[str] = []
@@ -254,11 +254,12 @@ class VenvBuilder(BaseBuilder):
         spec.update_packages(packages=new_packages)
 
     def link(self, env_dir: Union[str, Path], verbose: bool = False):
-        # TODO: This discovery stuff should go into caller routine
-        if (Path(self.venv_home) / env_dir).exists():
-            path = Path(self.venv_home) / env_dir
+        home_path = self.venv_home / env_dir
+        if home_path.exists():
+            path = home_path
         else:
             path = Path(env_dir)
+
         if not builder_util.is_valid_venv(path, verbose=verbose):
             msg = (
                 f"The specified path {str(env_dir)} was not recognized as a valid "
@@ -293,7 +294,7 @@ class VenvBuilder(BaseBuilder):
     def uninstall(
         self,
         spec: PythonSpec,
-        packages: List[str],
+        packages: Optional[List[str]] = None,
         requirements_file: Optional[str] = None,
         pip_options: Optional[List[str]] = None,
         verbose: bool = False,
@@ -304,7 +305,12 @@ class VenvBuilder(BaseBuilder):
         executable = spec.executable
 
         # do not ask for confirmation
-        command = [executable, "-m", "pip", "uninstall", "-y", *packages]
+        command = [executable, "-m", "pip", "uninstall", "-y"]
+        if packages is not None:
+            command += packages
+        elif requirements_file is not None:
+            command += ["-r", requirements_file]
+
         command += list(set(options))
 
         with pip_context("uninstall", spec.root, packages, None):

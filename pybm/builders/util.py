@@ -5,7 +5,7 @@ from typing import Union, Tuple
 from pybm.exceptions import BuilderError
 from pybm.specs import PythonSpec
 from pybm.util.common import version_tuple
-from pybm.util.path import get_subdirs, list_contents
+from pybm.util.path import get_subdirs, get_filenames
 from pybm.util.subprocess import run_subprocess
 
 
@@ -31,6 +31,7 @@ def get_executable(root: Union[str, Path]) -> str:
 
 def is_valid_venv(path: Union[str, Path], verbose: bool = False) -> bool:
     """Check if a directory is a valid virtual environment."""
+
     subdir_set = set(get_subdirs(path=path))
     if os.name != "nt":
         exec_set, bin_folder = {"pip", "python"}, "bin"
@@ -69,7 +70,7 @@ def is_valid_venv(path: Union[str, Path], verbose: bool = False) -> bool:
             end="",
         )
 
-    actual_set = set(list_contents(bin_dir, names_only=True))
+    actual_set = set(get_filenames(bin_dir))
 
     if not exec_set <= actual_set:
         if verbose:

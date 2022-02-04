@@ -88,9 +88,9 @@ def git_worktree_context(
             f"Successfully {action}ed {new_or_existing} worktree for {ref_type} "
             f"{ref!r} {where} location {abbrev_home(directory)}."
         )
-
     except GitError:
         print("failed.")
+        raise
 
 
 class GitWorktreeWrapper:
@@ -116,8 +116,8 @@ class GitWorktreeWrapper:
         for k, v in kwargs.items():
             if k not in command_options:
                 logger.debug(
-                    f"Encountered unknown command line option {k!r} "
-                    f"with value {v!r} for `git worktree {command}`."
+                    f"Encountered unknown command line option {k!r} with value {v!r} "
+                    f"for `git worktree {command}`."
                 )
                 continue
 
@@ -177,7 +177,7 @@ class GitWorktreeWrapper:
         worktree_command, *rest = command[2:]
         assert (
             worktree_command in self.command_db
-        ), f"unimplemented git worktree command {worktree_command!r}"
+        ), f"unimplemented git worktree command {worktree_command!r}."
 
         min_version = _git_worktree_versions[worktree_command]
         options = _git_option_versions[worktree_command]
@@ -242,9 +242,9 @@ class GitWorktreeWrapper:
         # check for existing worktree with the same ref
         if not force and self.get_worktree_by_attr(ref_type, ref) is not None:
             msg = (
-                f"Worktree for {ref_type} {commit_ish!r} already exists. "
-                f"If you want to check out the same {ref_type} multiple "
-                f"times, supply the -f/--force option to `pybm create`."
+                f"Worktree for {ref_type} {commit_ish!r} already exists. If you want "
+                f"to check out the same {ref_type} multiple times, supply the "
+                f"-f/--force option to `pybm create`."
             )
             raise GitError(msg)
 

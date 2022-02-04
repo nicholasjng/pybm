@@ -39,6 +39,6 @@ def parse_args(args: List[str]) -> Tuple[str, List[str]]:
 def parse_command(command_name: str) -> CLICommand:
     if command_name not in command_db:
         # TODO: Print similar commands if any, or print options
-        raise CommandError(f"Unknown command {command_name}")
+        raise CommandError(f"Unknown command {command_name!r}")
 
     return command_db[command_name]()

@@ -90,11 +90,14 @@ def flatten(t):
 
 
 def partition_n(n: int, fn: Callable[[T], int], listlike: Iterable[T]) -> List[List[T]]:
-    return_obj: List[List[T]] = [[] for _ in range(n)]
+    # explicit list comprehension to avoid identical object IDs
+    partitions: List[List[T]] = [[] for _ in range(n)]
+
     for elem in listlike:
         k = fn(elem)
         assert (
             0 <= k < n
         ), f"partition function needs to return an integer in the interval [0, {n})."
-        return_obj[k].append(elem)
-    return return_obj
+        partitions[k].append(elem)
+
+    return partitions

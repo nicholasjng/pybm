@@ -10,35 +10,8 @@ from pybm.util.common import lfilter, dfilter, dkfilter, lmap
 from pybm.util.functions import is_context_provider
 from pybm.util.git import get_from_history
 from pybm.util.imports import import_from_module
-from pybm.util.path import get_subdirs, list_contents
+from pybm.util.path import lsdir
 from pybm.util.print import abbrev_home
-
-
-def create_rundir(result_dir: Union[str, Path]) -> Path:
-    # int key prevents unexpected sorting results for more than 10
-    # directories (order 1 -> 10 -> 2 -> 3 ...)
-    subdirs = sorted(get_subdirs(result_dir), key=int)
-
-    folder = str(len(subdirs) + 1)
-
-    result_path = Path(result_dir) / folder
-
-    # result subdirectory should not exist at this point.
-    result_path.mkdir(parents=False, exist_ok=False)
-
-    return result_path
-
-
-def create_subdir(result_dir: Union[str, Path], worktree: Worktree) -> Path:
-    ref, ref_type = worktree.get_ref_and_type()
-
-    if ref_type in ["branch", "tag"]:
-        ref = ref.replace("/", "-")
-
-    result_subdir = Path(result_dir) / ref
-    result_subdir.mkdir(parents=False, exist_ok=False)
-
-    return result_subdir
 
 
 @contextlib.contextmanager
@@ -85,16 +58,16 @@ def discover_targets(
             checkout_complete = True
 
         print(
-            f"Discovering benchmark targets for {ref_type} {current_ref!r} "
-            f"in worktree {abbrev_home(root)!r}.....",
+            f"Discovering benchmark targets for {ref_type} {current_ref!r} in "
+            f"worktree {abbrev_home(root)!r}.....",
             end="",
         )
 
         benchmark_path = Path(root) / source_path
 
         if benchmark_path.is_dir():
-            benchmark_targets = list_contents(
-                benchmark_path, file_suffix=".py", rel_path=root
+            benchmark_targets = lmap(
+                str, lsdir(benchmark_path, file_suffix=".py", rel_path=root)
             )
         elif benchmark_path.is_file():
             benchmark_targets = [str(source_path)]
