@@ -72,6 +72,7 @@ class BaseRunner:
     ) -> List[str]:
         flags, prefix = [], self.prefix
         ref, _ = environment.worktree.get_ref_and_type()
+        commit: str = environment.worktree.commit
 
         if benchmark_context is None:
             benchmark_context = []
@@ -80,8 +81,9 @@ class BaseRunner:
             benchmark_context = lmap(
                 lambda x: f"{prefix}_context=" + x, benchmark_context
             )
-        # supply the ref by default.
+        # supply the ref and commit by default.
         benchmark_context += [f"{prefix}_context=ref={ref}"]
+        benchmark_context += [f"{prefix}_context=commit={commit}"]
 
         if benchmark_filter is not None:
             flags.append(f"{prefix}_filter={benchmark_filter}")
