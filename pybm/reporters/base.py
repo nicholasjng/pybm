@@ -1,7 +1,15 @@
 from pathlib import Path
-from typing import Union, Optional, List
+from typing import Optional, Protocol
 
 from pybm import PybmConfig
+
+
+class PybmIO(Protocol):
+    def read(self, *args, **kwargs):
+        ...
+
+    def write(self, *args, **kwargs):
+        ...
 
 
 class BaseReporter:
@@ -12,21 +20,28 @@ class BaseReporter:
 
         self.significant_digits: int = config.get_value("reporter.significantdigits")
 
+        self.shalength: int = config.get_value("reporter.shalength")
+
+        self.io: Optional[PybmIO] = None
+
     def additional_arguments(self):
         raise NotImplementedError
 
     def compare(
         self,
         *refs: str,
-        results: List[Union[str, Path]],
-        report_absolutes: bool = False,
+        absolute: bool = False,
+        previous: int = 1,
         target_filter: Optional[str] = None,
         benchmark_filter: Optional[str] = None,
         context_filter: Optional[str] = None
     ) -> None:
         raise NotImplementedError
 
-    def load(
-        self, ref: str, result: Union[str, Path], target_filter: Optional[str] = None
-    ):
-        raise NotImplementedError
+    def read(self, *args, **kwargs):
+        assert self.io is not None
+        return self.io.read(*args, **kwargs)
+
+    def write(self, *args, **kwargs):
+        assert self.io is not None
+        self.io.write(*args, **kwargs)
