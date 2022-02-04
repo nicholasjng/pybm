@@ -1,4 +1,3 @@
-import json
 import warnings
 from pathlib import Path
 from typing import List, Optional
@@ -7,8 +6,9 @@ from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_component_class
 from pybm.env_store import EnvironmentStore
 from pybm.exceptions import PybmError
+from pybm.reporters import BaseReporter
 from pybm.runners import BaseRunner
-from pybm.runners.util import create_subdir, create_rundir, discover_targets
+from pybm.runners.util import discover_targets
 from pybm.status_codes import SUCCESS, ERROR
 
 
@@ -126,6 +126,7 @@ class RunCommand(CLICommand):
         runner_options = vars(options)
 
         runner: BaseRunner = get_component_class("runner", config=self.config)
+        reporter: BaseReporter = get_component_class("reporter", config=self.config)
 
         verbose: bool = runner_options.pop("verbose")
 
@@ -141,8 +142,6 @@ class RunCommand(CLICommand):
         benchmark_filter = runner_options.pop("benchmark_filter")
         benchmark_context = runner_options.pop("benchmark_context")
         # at this point, runner_options only include the additional runner kwargs
-
-        result_dir = create_rundir(runner.result_dir)
 
         if source_path.is_absolute():
             raise PybmError(
@@ -193,8 +192,6 @@ class RunCommand(CLICommand):
             worktree = environment.worktree
             ref, ref_type = worktree.get_ref_and_type()
 
-            subdir = create_subdir(result_dir=result_dir, worktree=worktree)
-
             runner.check_required_packages(environment=environment)
 
             with discover_targets(
@@ -241,23 +238,17 @@ class RunCommand(CLICommand):
 
                     if rc != 0:
                         raise PybmError(
-                            "Something went wrong during the benchmark. stderr output "
+                            "Something went wrong during the benchmark. Stderr output "
                             f"of the dispatched subprocess:\n{data}"
                         )
                     elif not data:
                         raise PybmError(
                             "No result data was obtained from the dispatched "
                             "benchmark subprocess. Please check that the configured "
-                            "benchmark runner actually writes the results to stdout. "
-                            "If you are using the Google Benchmark runner, please "
-                            "adapt your benchmark files to use Google Benchmark."
+                            "benchmark runner actually writes the results to stdout."
                         )
                     else:
-                        # TODO: Switch this to a general IO Connector
-                        result_name = Path(benchmark).stem + "_results.json"
-                        result_file = subdir / result_name
-                        with open(result_file, "w") as res:
-                            json.dump(json.loads(data), res)
+                        reporter.write(ref, benchmark, data)
 
         if checkout_mode:
             root_ref, root_type = root_checkout

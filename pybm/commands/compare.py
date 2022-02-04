@@ -5,7 +5,6 @@ from pybm.command import CLICommand
 from pybm.config import get_component_class
 from pybm.reporters import BaseReporter
 from pybm.status_codes import ERROR, SUCCESS
-from pybm.util.path import get_subdirs
 
 
 class CompareCommand(CLICommand):
@@ -73,16 +72,13 @@ class CompareCommand(CLICommand):
         reporter: BaseReporter = get_component_class("reporter", config=self.config)
 
         refs: List[str] = options.refs
-        n_previous: int = options.include_previous
-        report_absolutes: bool = options.absolute
-
-        result_dir = reporter.result_dir
-        results = sorted(get_subdirs(result_dir), key=int)[-n_previous:]
+        previous: int = options.include_previous
+        absolute: bool = options.absolute
 
         reporter.compare(
             *refs,
-            results=results,
-            report_absolutes=report_absolutes,
+            absolute=absolute,
+            previous=previous,
             target_filter=options.target_filter,
             benchmark_filter=options.benchmark_filter,
             context_filter=options.context_filter,

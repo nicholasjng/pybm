@@ -1,12 +1,10 @@
 import argparse
-from contextlib import ExitStack
 from typing import List, Callable, Mapping, Optional
 
 from pybm.builders import BaseBuilder
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, get_component_class
 from pybm.env_store import EnvironmentStore
-from pybm.exceptions import PybmError
 from pybm.logging import get_logger
 from pybm.status_codes import ERROR, SUCCESS
 
@@ -27,7 +25,7 @@ class EnvCommand(CLICommand):
         "   or: pybm env install <identifier> <packages> [<options>]\n"
         "   or: pybm env uninstall <identifier> <packages> [<options>]\n"
         "   or: pybm env list\n"
-        "   or: pybm env update <env> <attr> <value>\n"
+        "   or: pybm env switch <env> <ref>\n"
     )
 
     def __init__(self):
@@ -93,12 +91,12 @@ class EnvCommand(CLICommand):
                 "environment. Raises an error if the path does not exist or is not "
                 "recognized as a valid Python virtual environment.",
             )
-        elif subcommand in ["delete", "install", "uninstall"]:
+        elif subcommand == "delete":
             self.parser.add_argument(
                 "identifier",
                 metavar="<id>",
-                help="Information that uniquely identifies the environment. "
-                "Can be name, checked out commit/branch/tag, or worktree directory.",
+                help="Information that uniquely identifies the environment. Can be "
+                "name, checked out commit/branch/tag, or worktree directory.",
             )
             if subcommand == "delete":
                 self.parser.add_argument(
@@ -107,19 +105,35 @@ class EnvCommand(CLICommand):
                     action="store_true",
                     help="Force worktree removal, including untracked files.",
                 )
-            else:
-                self.parser.add_argument(
-                    "packages",
-                    nargs="*",
-                    default=None,
-                    metavar="<packages>",
-                    help="Package dependencies to install into the new virtual "
-                    "environment.",
-                )
+        elif subcommand in ["install", "uninstall"]:
+            self.parser.add_argument(
+                "name",
+                metavar="<name>",
+                help="Information that uniquely identifies the environment. Can be "
+                "name, checked out (partial) commit/branch/tag, or worktree directory.",
+            )
+            self.parser.add_argument(
+                "packages",
+                nargs="*",
+                default=None,
+                metavar="<packages>",
+                help="Package dependencies to install into / uninstall from the new "
+                "virtual environment.",
+            )
         elif subcommand == "list":
             pass
-        elif subcommand == "update":
-            pass
+        elif subcommand == "switch":
+            self.parser.add_argument(
+                "name",
+                metavar="<name>",
+                help="Name of the benchmark environment to switch checkout for.",
+            )
+            self.parser.add_argument(
+                "ref",
+                metavar="<ref>",
+                help="New git reference to check out in the chosen environment. Can "
+                "be a branch name, tag, or (partial) commit SHA.",
+            )
 
         assert subcommand is not None, "no valid subcommand specified"
 
@@ -134,7 +148,7 @@ class EnvCommand(CLICommand):
             )
             builder_group = self.parser.add_argument_group(builder_group_desc)
 
-            # add builder-specific options into the group
+            # add builder-specific options
             for arg in builder_args:
                 builder_group.add_argument(arg.pop("flags"), **arg)
 
@@ -191,53 +205,33 @@ class EnvCommand(CLICommand):
         verbose: bool = option_dict.pop("verbose")
 
         # env name / git worktree info
-        identifier: str = option_dict.pop("identifier")
+        info: str = option_dict.pop("identifier")
 
-        # builder arguments
         packages: Optional[List[str]] = option_dict.pop("packages")
-
-        builder: BaseBuilder = get_component_class("builder", config=self.config)
 
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
 
-        target_env = env_store.get(identifier)
-
-        with ExitStack() as ctx:
-            ctx.callback(env_store.save)
-            builder.install(
-                spec=target_env.python,
-                packages=packages,
-                verbose=verbose,
-                **option_dict,
-            )
+        env_store.install(info=info, packages=packages, verbose=verbose, **option_dict)
 
         return SUCCESS
 
     def uninstall(self, options: argparse.Namespace):
         option_dict = vars(options)
 
-        # verbosity
         verbose: bool = option_dict.pop("verbose")
 
-        identifier: str = option_dict.pop("identifier")
+        info: str = option_dict.pop("identifier")
 
-        # builder arguments
         packages: List[str] = option_dict.pop("packages")
-
-        builder: BaseBuilder = get_component_class("builder", config=self.config)
 
         env_store = EnvironmentStore(config=self.config, verbose=verbose)
 
-        target_env = env_store.get(identifier)
-
-        with ExitStack() as ctx:
-            ctx.callback(env_store.save)
-            builder.uninstall(
-                spec=target_env.python,
-                packages=packages,
-                verbose=verbose,
-                **option_dict,
-            )
+        env_store.uninstall(
+            info=info,
+            packages=packages,
+            verbose=verbose,
+            **option_dict,
+        )
 
         return SUCCESS
 
@@ -249,8 +243,13 @@ class EnvCommand(CLICommand):
 
         return SUCCESS
 
-    def update(self, options: argparse.Namespace):
-        raise PybmError("env updating is not implemented yet.")
+    def switch(self, options: argparse.Namespace):
+        name: str = options.name
+        ref: str = options.ref
+        verbose: bool = options.verbose
+
+        env_store = EnvironmentStore(config=self.config, verbose=verbose)
+        env_store.switch(name=name, ref=ref)
 
     def run(self, args: List[str]):
         logger.debug(f"Running command: `{self.format_call(args)}`")
@@ -261,7 +260,7 @@ class EnvCommand(CLICommand):
             "install": self.install,
             "uninstall": self.uninstall,
             "list": self.list,
-            "update": self.update,
+            "switch": self.switch,
         }
 
         if not args or args[0] not in subcommand_handlers:
