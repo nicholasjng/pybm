@@ -205,5 +205,7 @@ description_db: Dict[str, Dict[str, str]] = {
         "ms/msec, us/usec, and ns/nsec, where either spelling is admissible.",
         "significantdigits": "Number of significant digits to round floating point "
         "results to in console display.",
+        "shalength": "Length of git SHA fragments to display in console output. "
+        "Default value is 8, meaning the first eight hex digits are displayed.",
     },
 }

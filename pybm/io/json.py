@@ -36,9 +36,7 @@ class JSONFileIO:
         json_files = [f for f in json_files if any(ref in f.parts for ref in refs)]
 
         if target_filter is not None:
-            json_files = lmap(
-                Path, lfilter_regex(target_filter, lmap(str, json_files))
-            )
+            json_files = lmap(Path, lfilter_regex(target_filter, lmap(str, json_files)))
 
         results = []
 

@@ -2,9 +2,6 @@ import operator
 from typing import Optional, Any
 
 from pybm.exceptions import PybmError
-from pybm.logging import get_logger
-
-logger = get_logger(__name__)
 
 
 class StateMixin:

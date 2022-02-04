@@ -2,7 +2,7 @@ import sys
 from contextlib import ExitStack
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, Dict
+from typing import Optional, Dict, List
 
 import toml
 
@@ -194,7 +194,7 @@ class EnvironmentStore:
 
         return env_to_remove
 
-    def get(self, value: Any) -> BenchmarkEnvironment:
+    def get(self, value: str) -> BenchmarkEnvironment:
         # check for known git info, otherwise use name
         info = disambiguate_info(value)
         attr = "worktree " + info if info else "name"
@@ -221,6 +221,26 @@ class EnvironmentStore:
 
             raise PybmError(
                 f"Benchmark environment with {attr} {value!r} does not exist."
+            )
+
+    def install(
+        self,
+        info: str,
+        packages: Optional[List[str]],
+        verbose: bool = False,
+        **option_dict,
+    ):
+
+        target_env = self.get(info)
+
+        with ExitStack() as ctx:
+            ctx.callback(self.save)
+
+            self.builder.install(
+                spec=target_env.python,
+                packages=packages,
+                verbose=verbose,
+                **option_dict,
             )
 
     def list(self, padding: int = 1):
@@ -296,3 +316,23 @@ class EnvironmentStore:
             env.lastmod = datetime.now().strftime(self.datefmt)
 
         return env
+
+    def uninstall(
+        self,
+        info: str,
+        packages: Optional[List[str]],
+        verbose: bool = False,
+        **option_dict,
+    ):
+
+        target_env = self.get(info)
+
+        with ExitStack() as ctx:
+            ctx.callback(self.save)
+
+            self.builder.uninstall(
+                spec=target_env.python,
+                packages=packages,
+                verbose=verbose,
+                **option_dict,
+            )

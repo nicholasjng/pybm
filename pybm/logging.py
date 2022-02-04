@@ -2,33 +2,33 @@ import logging
 import pathlib
 import sys
 
-# import pybm
-
-FORMAT = "%(asctime)s — %(name)-12s — %(levelname)s — %(message)s"
-DATEFORMAT = "%d/%m/%Y %I:%M:%S %p"
-FORMATTER = logging.Formatter(fmt=FORMAT, datefmt=DATEFORMAT)
-LOGFILE = "logs/logs.txt"
-DEFAULT_LEVEL = logging.WARNING
+from pybm import PybmConfig, PybmError
 
 
-def get_file_handler():
-    # pybm.PybmConfig.load(".pybm/config.yaml")
-    pathlib.Path(LOGFILE).parent.mkdir(parents=True, exist_ok=True)
-    file_handler = logging.FileHandler(filename=LOGFILE, mode="a+")
-    file_handler.setLevel(DEFAULT_LEVEL)
-    file_handler.setFormatter(FORMATTER)
+def get_file_handler(config: PybmConfig):
+    logfile = pathlib.Path(config.get_value("core.logfile"))
+    logfile.parent.mkdir(parents=False, exist_ok=True)
+    file_handler = logging.FileHandler(filename=logfile, mode="a+")
+    file_handler.setLevel(config.get_value("core.loglevel"))
+    file_handler.setFormatter(config.get_value("core.logfmt"))
     return file_handler
 
 
-def get_stream_handler():
+def get_stream_handler(config: PybmConfig):
     stream_handler = logging.StreamHandler(stream=sys.stdout)
-    stream_handler.setFormatter(FORMATTER)
-    stream_handler.setLevel(DEFAULT_LEVEL)
+    stream_handler.setFormatter(config.get_value("core.logfmt"))
+    stream_handler.setLevel(config.get_value("core.loglevel"))
     return stream_handler
 
 
 def get_logger(name: str):
     logger = logging.getLogger(name=name)
-    logger.setLevel(DEFAULT_LEVEL)
-    logger.addHandler(get_file_handler())
+    try:
+        config = PybmConfig.load()
+    except PybmError:
+        # run with default settings
+        config = PybmConfig()
+
+    logger.setLevel(config.get_value("core.loglevel"))
+    logger.addHandler(get_file_handler(config=config))
     return logger

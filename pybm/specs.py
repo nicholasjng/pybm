@@ -145,9 +145,10 @@ class RunnerGroup:
 
 @dataclass
 class ReporterGroup:
-    name: str = "pybm.reporters.ConsoleReporter"
+    name: str = "pybm.reporters.JSONConsoleReporter"
     timeunit: str = "usec"
     significantdigits: int = 2
+    shalength: int = 8
 
 
 EmptyPythonSpec = PythonSpec(root="", executable="", version="")
