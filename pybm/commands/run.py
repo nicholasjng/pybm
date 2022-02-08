@@ -22,7 +22,6 @@ class RunCommand(CLICommand):
     def __init__(self):
         super(RunCommand, self).__init__(name="run")
         self.config = PybmConfig.load()
-        self.use_legacy_checkout: bool = self.config.get_value("git.legacycheckout")
 
     def add_arguments(self):
         self.parser.add_argument(
@@ -56,8 +55,8 @@ class RunCommand(CLICommand):
             action="store_true",
             default=False,
             help="Run benchmarks in checkout mode in environment 'root'. Here, instead "
-            "of persisted git worktrees, different refs are benchmarked using "
-            "`git checkout` commands.",
+            "of persisted git worktrees, different refs are benchmarked using `git "
+            "checkout` commands.",
         )
         self.parser.add_argument(
             "--all",
@@ -73,14 +72,14 @@ class RunCommand(CLICommand):
             default=None,
             dest="source_ref",
             metavar="<git-ref>",
-            help="Source benchmark targets from a different git reference.",
+            help="Source benchmark targets from a different git reference <git-ref>.",
         )
         self.parser.add_argument(
             "--repetitions",
             type=int,
             default=5,
             metavar="<N>",
-            help="Number of repetitions for the target benchmarks.",
+            help="Number of times to repeat the target benchmarks.",
         )
         self.parser.add_argument(
             "--filter",
@@ -98,8 +97,8 @@ class RunCommand(CLICommand):
             dest="benchmark_context",
             metavar="<context>",
             help="Additional global context, given as strings in the format "
-            "--context='key'='value'. Keys must be unique. Supplying two or more "
-            "context values for the same key results in an error.",
+            "--context='key'='value'. Keys must be unique, supplying more than one "
+            "value for the same key results in an error.",
         )
 
         runner: BaseRunner = get_component_class("runner", config=self.config)
@@ -128,6 +127,9 @@ class RunCommand(CLICommand):
         runner: BaseRunner = get_component_class("runner", config=self.config)
         reporter: BaseReporter = get_component_class("reporter", config=self.config)
 
+        # whether to use legacy checkouts (git < 2.17)
+        use_legacy_checkout: bool = self.config.get_value("git.legacycheckout")
+
         verbose: bool = runner_options.pop("verbose")
 
         env_ids: List[str] = runner_options.pop("environments") or []
@@ -135,11 +137,11 @@ class RunCommand(CLICommand):
         checkout_mode: bool = runner_options.pop("checkout")
         source_ref: Optional[str] = runner_options.pop("source_ref")
         source_path = Path(runner_options.pop("benchmarks"))
-        run_as_module = runner_options.pop("run_as_module")
+        run_as_module: bool = runner_options.pop("run_as_module")
 
         # runner dispatch arguments
-        repetitions = runner_options.pop("repetitions")
-        benchmark_filter = runner_options.pop("benchmark_filter")
+        repetitions: int = runner_options.pop("repetitions")
+        benchmark_filter: Optional[str] = runner_options.pop("benchmark_filter")
         benchmark_context = runner_options.pop("benchmark_context")
         # at this point, runner_options only include the additional runner kwargs
 
@@ -198,7 +200,7 @@ class RunCommand(CLICommand):
                 worktree=worktree,
                 source_path=source_path,
                 source_ref=source_ref,
-                use_legacy_checkout=self.use_legacy_checkout,
+                use_legacy_checkout=use_legacy_checkout,
             ) as benchmark_targets:
                 n = len(benchmark_targets)
                 if n > 0:
@@ -208,9 +210,9 @@ class RunCommand(CLICommand):
                     )
                 else:
                     msg = (
-                        f"Benchmark selector {str(source_path)!r} did not "
-                        f"match any directory or Python files for {ref_type} "
-                        f"{ref!r} in environment {environment.name!r}."
+                        f"Benchmark selector {str(source_path)!r} did not match any "
+                        f"directory or Python files for {ref_type} {ref!r} in "
+                        f"environment {environment.name!r}."
                     )
 
                     if runner.fail_fast:
@@ -247,8 +249,8 @@ class RunCommand(CLICommand):
                             "benchmark subprocess. Please check that the configured "
                             "benchmark runner actually writes the results to stdout."
                         )
-                    else:
-                        reporter.write(ref, benchmark, data)
+
+                    reporter.write(ref, benchmark, data)
 
         if checkout_mode:
             root_ref, root_type = root_checkout

@@ -91,7 +91,6 @@ def log_to_console(results: List[Dict[str, str]], padding: int = 1):
             print(make_separator(column_widths, padding=padding))
 
         print(make_line(res.values(), column_widths, padding=padding))
-        # TODO: Print summary about improvements etc.
 
 
 def reduce(results: List[Dict[str, Any]]) -> Dict[str, Any]:

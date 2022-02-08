@@ -13,7 +13,7 @@ from pybm.util.git import (
     disambiguate_info,
     resolve_ref,
     is_main_worktree,
-    checkout,
+    checkout as git_checkout,
     resolve_commit,
 )
 from pybm.util.path import current_folder
@@ -325,7 +325,7 @@ class GitWorktreeWrapper:
                 f"Object {ref!r} could not be understood as a valid git reference."
             )
 
-        checkout(ref=ref, cwd=worktree.root)
+        git_checkout(ref=ref, cwd=worktree.root)
 
         # null the old reference type if necessary
         if ref_type != old_type:
