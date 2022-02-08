@@ -5,8 +5,14 @@ from pybm.util.common import lmap
 
 
 def abbrev_home(path: Union[str, Path]) -> str:
-    homepath = Path(path).resolve().relative_to(Path.home())
-    return str(Path("~") / homepath)
+    path = Path(path).resolve()
+    try:
+        homepath = path.relative_to(Path.home())
+        abbrev_path = str(Path("~") / homepath)
+    except ValueError:
+        # case where the env path is not a subpath of the home directory
+        abbrev_path = str(path)
+    return abbrev_path
 
 
 def calculate_column_widths(data: Iterable[Iterable[str]]) -> List[int]:
@@ -17,9 +23,8 @@ def calculate_column_widths(data: Iterable[Iterable[str]]) -> List[int]:
 def make_line(values: Iterable[str], column_widths: Iterable[int], padding: int) -> str:
     pad_char = " " * padding
     sep = "|".join([pad_char] * 2)
-    offset = pad_char
 
-    line = offset + sep.join(f"{n:<{w}}" for n, w in zip(values, column_widths))
+    line = pad_char + sep.join(f"{n:<{w}}" for n, w in zip(values, column_widths))
     return line
 
 

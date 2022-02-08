@@ -35,12 +35,16 @@ def process(bm: Dict[str, Any], target_time_unit: str, shalength: int):
     bm["name"] = format_benchmark(bm.pop("name"), bm.pop("executable"))
     bm["reference"] = format_ref(bm.pop("ref"), bm.pop("commit"), shalength=shalength)
 
-    time_unit: str = bm.pop("time_unit")
-    time_values: Dict[str, Any] = dfilter_regex(".*time", bm)
+    time_unit: Optional[str] = bm.pop("time_unit", None)
 
-    rescale_fn = partial(rescale, current_unit=time_unit, target_unit=target_time_unit)
+    if time_unit is not None:
+        time_values: Dict[str, Any] = dfilter_regex(".*time", bm)
 
-    bm.update(dvmap(rescale_fn, time_values))
+        rescale_fn = partial(
+            rescale, current_unit=time_unit, target_unit=target_time_unit
+        )
+
+        bm.update(dvmap(rescale_fn, time_values))
 
     return bm
 
@@ -48,6 +52,9 @@ def process(bm: Dict[str, Any], target_time_unit: str, shalength: int):
 def compare(results: List[Dict[str, Any]]):
     """Compare results between different refs with respect to an anchor ref. Assumes
     that the results are sorted in the same order."""
+    if len(results) == 1:
+        return results
+
     anchor_result = results[0]
 
     for result in results:
@@ -152,7 +159,7 @@ class JSONConsoleReporter(BaseReporter):
 
         processed_results = lmap(process_fn, reduced)
 
-        # group results by again benchmark name
+        # group results again by benchmark name
         grouped_results = groupby("name", processed_results)
 
         if absolute:
@@ -164,6 +171,7 @@ class JSONConsoleReporter(BaseReporter):
         formatted_results = lmap(transform_fn, compared_results)
 
         log_to_console(formatted_results, padding=self.padding)
+        # TODO: Print summary about improvements etc.
 
     def transform_result(self, bm: Dict[str, Any], anchor_ref: str) -> Dict[str, str]:
         """Finalize column header names, cast all values to string and
