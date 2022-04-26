@@ -4,7 +4,7 @@ from pathlib import Path
 # from datetime import datetime
 from typing import List
 
-from pybm.config import config, get_component_class
+from pybm.config import config, get_component
 from pybm.providers import BaseProvider
 from pybm.command import CLICommand
 from pybm.git import GitWorktreeWrapper, GitWorktree
@@ -47,7 +47,7 @@ class CreateCommand(WorkspaceManagerContextMixin, CLICommand):
 
         # git worktree wrapper and builder class
         self.git_worktree = GitWorktreeWrapper()
-        self.provider = get_component_class("provider")
+        self.provider = get_component("provider")
 
         # relevant config attributes
         self.datefmt = config.get_value("core.datefmt")

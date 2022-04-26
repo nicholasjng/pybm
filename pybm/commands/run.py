@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from pybm.command import CLICommand
-from pybm.config import config, get_component_class
+from pybm.config import config, get_component
 from pybm.exceptions import PybmError
 from pybm.mixins.filemanager import WorkspaceManagerContextMixin
 from pybm.reporters import BaseReporter
@@ -136,9 +136,9 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
         runner: BaseRunner = runner_options.pop("runner")
 
         if not runner:
-            runner = get_component_class("runner")
+            runner = get_component("runner")
 
-        reporter: BaseReporter = get_component_class("reporter")
+        reporter: BaseReporter = get_component("reporter")
 
         # whether to use legacy checkouts (git < 2.17)
         use_legacy_checkout: bool = config.get_value("git.legacycheckout")

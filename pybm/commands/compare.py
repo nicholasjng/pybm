@@ -1,7 +1,7 @@
 from typing import List
 
 from pybm.command import CLICommand
-from pybm.config import get_component_class
+from pybm.config import get_component
 from pybm.reporters import BaseReporter
 from pybm.status_codes import ERROR, SUCCESS
 
@@ -80,7 +80,7 @@ class CompareCommand(CLICommand):
 
         options = self.parser.parse_args(args)
 
-        reporter: BaseReporter = get_component_class("reporter")
+        reporter: BaseReporter = get_component("reporter")
 
         refs: List[str] = options.refs
         previous: int = options.include_previous

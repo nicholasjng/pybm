@@ -6,7 +6,7 @@ from pybm.command import CLICommand
 from pybm.config import (
     config as local_config,
     global_config,
-    get_component_class,
+    get_component,
     LOCAL_CONFIG,
 )
 from pybm.exceptions import PybmError
@@ -25,7 +25,7 @@ def init_default_workspace(
     worktree = GitWorktreeWrapper().get_main_worktree()
 
     if not provider:
-        provider = get_component_class("provider")
+        provider = get_component("provider")
 
     # keep mypy happy
     assert provider is not None
