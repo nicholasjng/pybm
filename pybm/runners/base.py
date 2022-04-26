@@ -3,12 +3,13 @@ from typing import Optional, Tuple, Callable, List, Any, Dict
 
 import argparse
 import pybm.runners.util as runner_util
-from pybm import PybmConfig
+from pybm.config import config
 from pybm.exceptions import PybmError
-from pybm.specs import BenchmarkEnvironment, Package
+from pybm.specs import Package
 from pybm.util.common import lmap
 from pybm.util.imports import convert_to_module_name
 from pybm.util.subprocess import run_subprocess
+from pybm.workspace import Workspace
 
 # A context provider produces name and value of a contextual
 # piece of information, e.g. processor architecture, cwd etc.
@@ -18,8 +19,7 @@ ContextProvider = Callable[[], Tuple[str, str]]
 class BaseRunner:
     """Base class for all pybm benchmark runners."""
 
-    def __init__(self, config: PybmConfig):
-        super().__init__()
+    def __init__(self):
         self.prefix = "--benchmark"
 
         # required packages for the runner
@@ -38,13 +38,10 @@ class BaseRunner:
             config.get_value("runner.contextproviders")
         )
 
-    def additional_arguments(self):
-        raise NotImplementedError
-
-    def check_required_packages(self, environment: BenchmarkEnvironment):
+    def check_required_packages(self, workspace: Workspace):
         missing_pkgs = []
 
-        installed = environment.get_value("python.packages")
+        installed = workspace.packages
         names_and_versions = dict(lmap(lambda x: x.split("=="), installed))
 
         for package in self.required_packages:
@@ -57,22 +54,22 @@ class BaseRunner:
         if len(missing_pkgs) > 0:
             raise PybmError(
                 f"Required packages {', '.join(missing_pkgs)} for runner class "
-                f"pybm.runners.{self.__class__.__name__} not installed in environment "
-                f"{environment.name!r}. To install them, run `pybm env install "
-                f"{environment.name} {' '.join(missing_pkgs)}`."
+                f"pybm.runners.{self.__class__.__name__} not installed in workspace "
+                f"{workspace.name!r}. To install them, run `pybm workspace install "
+                f"{workspace.name} {' '.join(missing_pkgs)}`."
             )
 
     def create_flags(
         self,
-        environment: BenchmarkEnvironment,
+        workspace: Workspace,
         repetitions: int = 1,
         benchmark_filter: Optional[str] = None,
         benchmark_context: Optional[List[str]] = None,
         **runner_kwargs,
     ) -> List[str]:
         flags, prefix = [], self.prefix
-        ref, _ = environment.worktree.get_ref_and_type()
-        commit: str = environment.worktree.commit
+        ref, _ = workspace.get_ref_and_type()
+        commit = workspace.commit
 
         if benchmark_context is None:
             benchmark_context = []
@@ -92,9 +89,8 @@ class BaseRunner:
 
         for k, v in runner_kwargs.items():
             if isinstance(v, bool):
-                if v is True:
-                    # leave out the value, presence of the flag implies "true"
-                    flags.append(f"{prefix}_{k}")
+                # use safe boolean parsing ('true/false') to support Google Benchmark
+                flags.append(f"{prefix}_{k}={str(v).lower()}")
             else:
                 flags.append(f"{prefix}_{k}={v}")
 
@@ -108,7 +104,7 @@ class BaseRunner:
     def dispatch(
         self,
         benchmark: str,
-        environment: BenchmarkEnvironment,
+        workspace: Workspace,
         run_as_module: bool = False,
         repetitions: int = 1,
         benchmark_filter: Optional[str] = None,
@@ -120,8 +116,8 @@ class BaseRunner:
         in a single target file. A subprocess will be spawned executing the
         benchmark in the given environment.
         """
-        python = environment.get_value("python.executable")
-        worktree_root = environment.get_value("worktree.root")
+        python = workspace.executable
+        worktree_root = workspace.root
 
         if run_as_module:
             module_name = convert_to_module_name(benchmark)
@@ -130,7 +126,7 @@ class BaseRunner:
             command = [python, benchmark]
 
         command += self.create_flags(
-            environment=environment,
+            workspace=workspace,
             repetitions=repetitions,
             benchmark_filter=benchmark_filter,
             benchmark_context=benchmark_context,
@@ -153,14 +149,27 @@ class BaseRunner:
 
         parser = argparse.ArgumentParser(prog=self.__class__.__name__, add_help=False)
 
+        def _safe_bool(s: str) -> bool:
+            """
+            Interpret 'true' as true, 'false' as false, everything else is an error.
+            """
+            if s.lower() == "true":
+                return True
+            elif s.lower() == "false":
+                return False
+            else:
+                raise ValueError("illegal input")
+
         # parts of the general benchmark runner spec
         parser.add_argument(f"{prefix}_repetitions", type=int)
         parser.add_argument(f"{prefix}_filter", type=str, default=None)
         parser.add_argument(f"{prefix}_context", action="append", default=None)
-
-        # runner-specific arguments
-        for arg in self.additional_arguments():
-            parser.add_argument(arg.pop("flags"), **arg)
+        parser.add_argument(
+            f"{prefix}_with_random_interleaving", type=_safe_bool, default=False
+        )
+        parser.add_argument(
+            f"{prefix}_report_aggregates_only", type=_safe_bool, default=False
+        )
 
         return parser.parse_args(flags)
 
