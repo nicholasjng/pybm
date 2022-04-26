@@ -8,12 +8,15 @@ def get_requirements() -> List[str]:
         return f.readlines()
 
 
+def get_long_description() -> str:
+    with open("README.md", "r", encoding="utf-8") as f:
+        return f.read()
+
+
 def get_extras():
     """Extra pybm functionality, specified as a valid argument to
     setuptools.setup's 'extras_require' keyword argument."""
-    extra_features = {
-        "gbm": ["google_benchmark @ git+https://github.com/google/benchmark"]
-    }
+    extra_features = {"gbm": ["google_benchmark"]}
     start: List[str] = []
     extra_features["all"] = sum(extra_features.values(), start)
     return extra_features
@@ -32,6 +35,8 @@ setup(
     name="pybm",
     version=get_version("pybm/__init__.py"),
     description="A Python CLI for reproducible benchmarking in a git repository.",
+    long_description=get_long_description(),
+    long_description_content_type="text/markdown",
     packages=find_packages(),
     install_requires=get_requirements(),
     extras_require=get_extras(),

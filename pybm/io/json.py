@@ -27,9 +27,7 @@ class JSONFileIO:
         path = self.result_dir / Path(result)
 
         if not path.exists() or not path.is_dir():
-            raise PybmError(
-                f"Given path {str(path)!r} does not exist or is not a directory."
-            )
+            raise PybmError(f"Given path {path} does not exist or is not a directory.")
 
         json_files = lsdir(path=path, file_suffix=".json", include_subdirs=True)
 
@@ -48,7 +46,7 @@ class JSONFileIO:
 
             if not all(key in benchmark_obj for key in keys):
                 raise PybmError(
-                    f"Malformed JSON result detected. Result {benchmark_obj} missing "
+                    f"Malformed JSON object. Result {benchmark_obj} missing "
                     f"at least one of the expected keys: {', '.join(keys)}."
                 )
 

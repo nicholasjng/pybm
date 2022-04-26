@@ -1,2 +1,2 @@
-toml
+pyyaml
 dataclasses; python_version<"3.7"

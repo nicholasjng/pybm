@@ -13,10 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out pybm
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v3
         with:
           python-version: 3.9
 
@@ -30,24 +30,24 @@ jobs:
         example: [sum-example, sum-example-gbm]
     steps:
       - name: Check out pybm
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Check out ${{ matrix.example }} repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
           repository: nicholasjng/pybm-${{ matrix.example }}
           path: ${{ matrix.example }}
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v3
         with:
           python-version: 3.9
 
       - name: Install pybm and other Python dependencies
         run: |
           python -m pip install wheel
-          python -m pip install .. git+https://github.com/google/benchmark
+          python -m pip install .. google-benchmark
         working-directory: ${{ matrix.example }}
 
       - name: Create virtual environment with the current pybm checkout
