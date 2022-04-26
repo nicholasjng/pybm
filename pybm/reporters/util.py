@@ -1,10 +1,9 @@
 import collections
-from pathlib import Path
 from statistics import mean, pstdev
-from typing import Tuple, List, Dict, Any, Union
+from typing import Tuple, List, Dict, Any, Union, Iterable
 
-from pybm.util.common import tmap, lmap, partition_n, lfilter, split_list
-from pybm.util.print import make_line, make_separator
+from pybm.util.common import tmap, lmap, partition_n, lfilter, split_list, safe_index
+from pybm.util.formatting import make_line, make_separator
 
 # metric time unit prefix table
 unit_table = {
@@ -21,53 +20,16 @@ unit_table = {
 PRIVILEGED_COLUMNS = ["name", "reference", "speedup", "iterations", "repetitions"]
 
 
-def format_benchmark(name: str, path_to_file: str) -> str:
-    python_file = Path(path_to_file)
-    target_path = python_file.relative_to(python_file.parents[1])
-    return str(target_path) + ":" + name
-
-
-def format_ref(ref: str, commit: str, shalength: int):
-    if ref != commit:
-        # ref is branch / tag
-        ref += f"@{commit[:shalength]}"
-    else:
-        # ref is commit, trim SHA to desired length
-        ref = ref[:shalength]
-
-    return ref
-
-
-def format_relative(value: float, digits: int) -> str:
-    return f"{value:+.{digits}%}"
-
-
-def format_speedup(speedup: float, digits: int) -> str:
-    return f"{speedup:.{digits}f}x"
-
-
-def format_time(time: Tuple[float, float], time_unit: str, digits: int) -> str:
-    tval, std = time
-
-    if time_unit.startswith("ns"):
-        # formatting nsecs as ints is nicer
-        res = f"{int(tval)} ± {int(std)}"
-    else:
-        res = f"{tval:.{digits}f} ± {std:.{digits}f}"
-
-    return res
-
-
-def get_unique(attr: Union[str, List[str]], results: List[Dict[str, Any]]):
+def get_unique(attr: Union[str, List[str]], results: Iterable[Dict[str, Any]]):
     if isinstance(attr, str):
         attr = [attr]
 
-    names = lmap(lambda x: tuple(x[at] for at in attr), results)
+    names = map(lambda x: tuple(x[at] for at in attr), results)
     # Unlike set, Counter preserves insertion order.
     return list(collections.Counter(names))
 
 
-def groupby(attr: Union[str, List[str]], results: List[Dict[str, Any]]):
+def groupby(attr: Union[str, List[str]], results: Iterable[Dict[str, Any]]):
     if isinstance(attr, str):
         attr = [attr]
 
@@ -93,7 +55,7 @@ def log_to_console(results: List[Dict[str, str]], padding: int = 1):
         print(make_line(res.values(), column_widths, padding=padding))
 
 
-def reduce(results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def reduce(results: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     reduced: Dict[str, Any] = {}
 
     # accumulate same name benchmarks into lists
@@ -135,7 +97,7 @@ def sort_benchmark(bm: Dict[str, Any]) -> Dict[str, Any]:
     cols = name_info + lfilter(lambda x: "time" in x, bm.keys()) + exec_info
 
     reported_cols = sorted(
-        [k for k in bm.keys() if k in cols], key=lambda x: cols.index(x)
+        [k for k in bm.keys() if k in cols], key=lambda x: safe_index(cols, x)
     )
 
     return {k: bm[k] for k in reported_cols}
@@ -143,7 +105,7 @@ def sort_benchmark(bm: Dict[str, Any]) -> Dict[str, Any]:
 
 def transform_key(key: str) -> str:
     if key == "name":
-        return ("benchmark " + key).title()
+        return "Benchmark Name"
 
     # spaces, title case (capitalize each word)
     key = key.replace("_", " ").title()

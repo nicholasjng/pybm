@@ -3,7 +3,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import List, Mapping, Callable
 
-import toml
+import yaml
 
 from pybm.command import CLICommand
 from pybm.config import PybmConfig, GLOBAL_CONFIG, LOCAL_CONFIG
@@ -63,7 +63,7 @@ class ConfigCommand(CLICommand):
             return ERROR
 
         if is_dataclass(value):
-            print(toml.dumps({attr: asdict(value)}))
+            print(yaml.dump({attr: asdict(value)}))
         else:
             print(f"{attr} = {value}")
 

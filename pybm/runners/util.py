@@ -5,36 +5,35 @@ from pathlib import Path
 from typing import List, Any, Dict, Union, Optional, Tuple
 
 from pybm.exceptions import PybmError
-from pybm.specs import Worktree
 from pybm.util.common import lfilter, dfilter, dkfilter, lmap
 from pybm.util.functions import is_context_provider
 from pybm.util.git import get_from_history
 from pybm.util.imports import import_from_module
 from pybm.util.path import lsdir
-from pybm.util.print import abbrev_home
+from pybm.util.formatting import abbrev_home
+from pybm.workspace import Workspace
 
 
 @contextlib.contextmanager
 def discover_targets(
-    worktree: Worktree,
+    workspace: Workspace,
     source_path: Union[str, Path],
     source_ref: Optional[str] = None,
     use_legacy_checkout: bool = False,
 ):
-    root = worktree.root
-    current_ref, ref_type = worktree.get_ref_and_type()
+    root, name = workspace.root, workspace.name
+    current_ref, ref_type = workspace.get_ref_and_type()
 
     # boolean flag indicating checkout
     checkout_complete = False
 
     print(
-        f"Starting benchmark run for {ref_type} {current_ref!r} "
-        f"in worktree {abbrev_home(root)!r} ."
+        f"Starting benchmark run for {ref_type} {current_ref!r} in workspace {name!r}."
     )
 
     try:
         if source_ref is not None and source_ref != current_ref:
-            if worktree.has_untracked_files():
+            if workspace.has_untracked_files():
                 raise PybmError(
                     "Sourcing benchmarks from other git reference requires a clean "
                     "worktree, but there are untracked files present in the worktree "
@@ -44,8 +43,8 @@ def discover_targets(
                 )
 
             print(
-                f"Checking out benchmark resource {str(source_path)!r} from git "
-                f"reference {source_ref!r} into worktree {abbrev_home(root)!r}."
+                f"Checking out benchmark resource {source_path} from git "
+                f"reference {source_ref!r} into workspace {name!r}."
             )
 
             get_from_history(
@@ -59,7 +58,7 @@ def discover_targets(
 
         print(
             f"Discovering benchmark targets for {ref_type} {current_ref!r} in "
-            f"worktree {abbrev_home(root)!r}.....",
+            f"workspace {name!r}.....",
             end="",
         )
 
@@ -67,7 +66,7 @@ def discover_targets(
 
         if benchmark_path.is_dir():
             benchmark_targets = lmap(
-                str, lsdir(benchmark_path, file_suffix=".py", rel_path=root)
+                str, lsdir(benchmark_path, file_suffix=".py", relative_to=root)
             )
         elif benchmark_path.is_file():
             benchmark_targets = [str(source_path)]
@@ -98,11 +97,11 @@ def discover_targets(
             )
 
             # revert checkout of untracked files with `git clean`
-            worktree.clean()
+            workspace.clean()
 
             print(
                 f"Finished benchmark run for {ref_type} {current_ref!r} "
-                f"in worktree {abbrev_home(root)!r} ."
+                f"in workspace {name!r} ."
             )
 
 
@@ -122,7 +121,7 @@ def filter_targets(module_context: Dict[str, Any], regex_filter: Optional[str] =
     return filtered_context
 
 
-def is_module_member(obj_tuple: Tuple[str, Any], module_name: str):
+def is_module_member(obj_tuple: Tuple[str, Any], module_name: str) -> bool:
     """Check membership of object in __main__ module to avoid benchmarking
     imports due to accidentally pattern matching them."""
     obj = obj_tuple[1]
@@ -163,7 +162,8 @@ def validate_context(context: List[str], parsed: bool = False):
                 f"Multiple values for context value {name!r} were given. Perhaps you "
                 f"gave some context information twice, once on the command line as "
                 f"global context, and via a set environment-specific context provider. "
-                f"To check the currently set environment-specific context providers, "
-                f"run the command `pybm config get runner.contextproviders`."
+                f"To check the currently set context providers, run the command "
+                f"`pybm config get runner.contextproviders`."
             )
-        seen[name] = value
+        else:
+            seen[name] = value

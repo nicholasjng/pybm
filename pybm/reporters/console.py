@@ -1,15 +1,9 @@
 from functools import partial
 from typing import Optional, Any, Dict, List, Callable
 
-from pybm import PybmConfig
 from pybm.io.json import JSONFileIO
 from pybm.reporters.base import BaseReporter
 from pybm.reporters.util import (
-    format_benchmark,
-    format_ref,
-    format_relative,
-    format_speedup,
-    format_time,
     groupby,
     log_to_console,
     reduce,
@@ -22,6 +16,13 @@ from pybm.util.common import (
     dvmap,
     flatten,
     lmap,
+)
+from pybm.util.formatting import (
+    format_benchmark,
+    format_ref,
+    format_relative,
+    format_speedup,
+    format_time,
 )
 from pybm.util.path import get_subdirs
 
@@ -78,8 +79,8 @@ def compare(results: List[Dict[str, Any]]):
 
 
 class JSONConsoleReporter(BaseReporter):
-    def __init__(self, config: PybmConfig):
-        super(JSONConsoleReporter, self).__init__(config=config)
+    def __init__(self):
+        super(JSONConsoleReporter, self).__init__()
 
         # file IO for reading / writing JSON files
         self.io = JSONFileIO(result_dir=self.result_dir)  # type: ignore
@@ -88,44 +89,12 @@ class JSONConsoleReporter(BaseReporter):
         self.formatters: Dict[str, Callable[[Any], str]] = {
             "time": partial(
                 format_time,
+                unit=self.target_time_unit,
                 digits=self.significant_digits,
-                time_unit=self.target_time_unit,
             ),
             "relative": partial(format_relative, digits=self.significant_digits),
             "speedup": partial(format_speedup, digits=self.significant_digits),
         }
-
-    def additional_arguments(self):
-        args = [
-            {
-                "flags": "--target-filter",
-                "type": str,
-                "default": None,
-                "metavar": "<regex>",
-                "help": "Regex filter to selectively filter benchmark target files. "
-                "If specified, only benchmark files matching the given regex will be "
-                "included in the report.",
-            },
-            {
-                "flags": "--benchmark-filter",
-                "type": str,
-                "default": None,
-                "metavar": "<regex>",
-                "help": "Regex filter to selectively report benchmarks from the "
-                "matched target files. If specified, only benchmarks matching the "
-                "given regex will be included in the report.",
-            },
-            {
-                "flags": "--context-filter",
-                "type": str,
-                "default": None,
-                "metavar": "<regex>",
-                "help": "Regex filter for additional context to report from the "
-                "benchmarks. If specified, context values matching the given "
-                "regex will be included in the report.",
-            },
-        ]
-        return args
 
     def compare(
         self,
@@ -148,7 +117,7 @@ class JSONConsoleReporter(BaseReporter):
                 context_filter=context_filter,
             )
 
-        # reduce results with the same name and commit
+        # aggregate results with the same name and commit
         reduced = [reduce(group) for group in groupby(["name", "commit"], benchmarks)]
 
         process_fn = partial(
@@ -163,9 +132,9 @@ class JSONConsoleReporter(BaseReporter):
         grouped_results = groupby("name", processed_results)
 
         if absolute:
-            compared_results = flatten(lmap(lambda x: x, grouped_results))
+            compared_results = flatten(grouped_results)
         else:
-            compared_results = flatten(lmap(compare, grouped_results))
+            compared_results = flatten(map(compare, grouped_results))
 
         transform_fn = partial(self.transform_result, anchor_ref=refs[0])
         formatted_results = lmap(transform_fn, compared_results)
@@ -174,8 +143,9 @@ class JSONConsoleReporter(BaseReporter):
         # TODO: Print summary about improvements etc.
 
     def transform_result(self, bm: Dict[str, Any], anchor_ref: str) -> Dict[str, str]:
-        """Finalize column header names, cast all values to string and
-        optionally format them, too (e.g. floating point numbers)."""
+        """
+        Finalize column header names, cast values to string, and optionally format.
+        """
         sorted_bm = sort_benchmark(bm)
         transformed = {}
 

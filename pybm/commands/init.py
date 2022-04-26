@@ -1,16 +1,44 @@
+import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pybm.command import CLICommand
-from pybm.config import PybmConfig, LOCAL_CONFIG, GLOBAL_CONFIG
-from pybm.env_store import EnvironmentStore
+from pybm.config import (
+    config as local_config,
+    global_config,
+    get_component,
+    LOCAL_CONFIG,
+)
 from pybm.exceptions import PybmError
+from pybm.git import GitWorktreeWrapper
+from pybm.mixins.filemanager import WorkspaceManagerContextMixin
+from pybm.providers import BaseProvider
 from pybm.status_codes import SUCCESS
 from pybm.util.git import is_main_worktree
 from pybm.util.path import get_filenames
+from pybm.workspace import Workspace, _MAIN_NAME
 
 
-class InitCommand(CLICommand):
+def init_default_workspace(
+    provider: Optional[BaseProvider] = None, link_only: bool = False
+) -> Workspace:
+    worktree = GitWorktreeWrapper().get_main_worktree()
+
+    if not provider:
+        provider = get_component("provider")
+
+    # keep mypy happy
+    assert provider is not None
+
+    if link_only:
+        spec = provider.link(path=worktree.root)
+    else:
+        spec = provider.create(executable=sys.executable, destination=worktree.root)
+
+    return Workspace(name=_MAIN_NAME, worktree=worktree, spec=spec)
+
+
+class InitCommand(WorkspaceManagerContextMixin, CLICommand):
     """
     Initialize pybm in a git repository by adding a configuration file
     and an environment list into a directory.
@@ -27,13 +55,13 @@ class InitCommand(CLICommand):
             action="store_true",
             default=False,
             dest="remove_existing",
-            help="Overwrite existing configuration.",
+            help="Overwrite any existing configuration.",
         )
-
         self.parser.add_argument(
             "-o",
             "--override",
             action="append",
+            default=list(),
             dest="overrides",
             help="Override a specific configuration setting with a custom value "
             "for the new pybm configuration file. Supplied arguments need to have the "
@@ -47,6 +75,14 @@ class InitCommand(CLICommand):
             help="Skip applying system-wide defaults set in the global config file to "
             "the newly created pybm configuration.",
         )
+        self.parser.add_argument(
+            "--provider",
+            type=str,
+            default=None,
+            choices=("stdlib",),
+            metavar="<provider>",
+            help="Python provider to use for virtual environment setup.",
+        )
 
     def run(self, args: List[str]) -> int:
         self.add_arguments()
@@ -55,20 +91,18 @@ class InitCommand(CLICommand):
 
         verbose: bool = options.verbose
         skip_global: bool = options.skip_global
-        overrides: List[str] = options.overrides or []
+        overrides: List[str] = options.overrides
+        provider: BaseProvider = options.provider
 
         if verbose:
             print(f"Parsed command line options: {options}")
 
         if not is_main_worktree(Path.cwd()):
             raise PybmError(
-                "Cannot initialize pybm: current directory is not a git repository."
+                "Cannot initialize pybm: Current directory is not a git repository."
             )
 
-        local_config = PybmConfig()
-
-        if Path(GLOBAL_CONFIG).exists() and not skip_global:
-            global_config = PybmConfig.load(GLOBAL_CONFIG)
+        if global_config is not None and not skip_global:
             for k, v in global_config.items():
                 if v is not None:
                     if verbose:
@@ -77,7 +111,7 @@ class InitCommand(CLICommand):
 
         for override in overrides:
             try:
-                attr, value = override.split("=", maxsplit=2)
+                attr, value = override.split("=", maxsplit=1)
             except ValueError:
                 raise PybmError(
                     "Config overrides need to be specified in the form 'attr=value'."
@@ -88,26 +122,27 @@ class InitCommand(CLICommand):
 
             local_config.set_value(attr, value)
 
-        for cfg in [GLOBAL_CONFIG, LOCAL_CONFIG]:
-            config_dir = Path(cfg).parent
-            config_dir.mkdir(parents=False, exist_ok=True)
+        # ensure the config directory exists
+        config_dir = Path(".pybm")
+        config_dir.mkdir(parents=False, exist_ok=True)
 
         if options.remove_existing:
-            for p in get_filenames(config_dir, file_ext=".toml"):
-                (config_dir / p).unlink()
+            for p in get_filenames(config_dir, file_ext=".yaml"):
+                Path(p).unlink()
 
-        if Path(LOCAL_CONFIG).exists():
+        # TODO: Make this dynamic from a config option / CLI option
+        error_on_exist = False
+        if Path(LOCAL_CONFIG) and error_on_exist:
             raise PybmError(
-                "Configuration file already exists. If you want to write a new "
-                "configuration file, run `pybm init --rm`."
+                "Configuration file already exists. If you want to overwrite the "
+                "existing configuration, run `pybm init --rm`."
             )
 
         local_config.save()
 
-        env_store = EnvironmentStore(
-            config=local_config, verbose=verbose, missing_ok=True
-        )
-
-        env_store.sync()
+        with self.main_context(verbose=verbose, missing_ok=True, readonly=False):
+            self.workspaces["main"] = init_default_workspace(
+                provider=provider, link_only=True
+            )
 
         return SUCCESS

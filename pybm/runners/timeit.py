@@ -7,7 +7,6 @@ from typing import List, Any, Dict, Optional
 from contextlib import redirect_stdout
 
 import pybm.runners.util as runner_util
-from pybm.config import PybmConfig
 from pybm.runners.base import BaseRunner
 from pybm.status_codes import SUCCESS
 from pybm.util.common import dfilter
@@ -16,15 +15,9 @@ from pybm.util.functions import is_valid_timeit_target
 
 class TimeitRunner(BaseRunner):
     """
-    A benchmark runner class interface designed to dispatch benchmarking
-    runs in pybm using Google Benchmark.
+    A benchmark runner class interface to dispatch benchmark runs in pybm
+    using Python's builtin `timeit` module.
     """
-
-    def __init__(self, config: PybmConfig):
-        super().__init__(config=config)
-
-    def additional_arguments(self):
-        return []
 
     @staticmethod
     def make_context(benchmark_context: List[str]):
@@ -72,9 +65,10 @@ class TimeitRunner(BaseRunner):
         # construct and fill context dictionary, add to JSON payload
         json_obj["context"] = self.make_context(benchmark_context)
 
-        # TODO: Enable stdout redirect to logfile
         with redirect_stdout(None):
             # TODO: Implement random interleaving option with permutations
+            benchmarks = []
+
             for name in module_targets.keys():
                 benchmark_obj: Dict[str, Any] = {
                     "name": name,
@@ -85,34 +79,48 @@ class TimeitRunner(BaseRunner):
                 }
 
                 # explicit list comprehension to get unique object IDs
-                benchmarks = [copy.copy(benchmark_obj) for _ in range(repeat)]
+                objs = [copy.copy(benchmark_obj) for _ in range(repeat)]
 
                 # Source for import:
                 # https://docs.python.org/3/library/timeit.html#examples
-                t_real = timeit.Timer(
-                    stmt=f"{name}()",
-                    setup=f"from __main__ import {name}",
-                    timer=time.perf_counter,
-                )
-
-                # Explanation of real vs. CPU time in python's 'time':
-                # https://stackoverflow.com/questions/25785243/understanding-time-perf-counter-and-time-process-time
-                t_cpu = timeit.Timer(
+                t_wall = timeit.Timer(
                     stmt=f"{name}()",
                     setup=f"from __main__ import {name}",
                     timer=time.process_time,
                 )
 
-                for t, ttype in [(t_real, "real_time"), (t_cpu, "cpu_time")]:
-                    number, _ = t.autorange(None)
+                # Explanation of wall vs. CPU time in python's 'time':
+                # https://stackoverflow.com/questions/25785243/understanding-time-perf-counter-and-time-process-time
+                t_cpu = timeit.Timer(
+                    stmt=f"{name}()",
+                    setup=f"from __main__ import {name}",
+                    timer=time.perf_counter,
+                )
 
-                    results = t.repeat(repeat=repeat, number=number)
+                try:
+                    n_wall, _ = t_wall.autorange(None)
+                    n_cpu, _ = t_cpu.autorange(None)
 
-                    for i, res in enumerate(results):
-                        bm = benchmarks[i]
-                        bm[ttype] = res / number
+                    wall_times = t_wall.repeat(repeat=repeat, number=n_wall)
+                    cpu_times = t_cpu.repeat(repeat=repeat, number=n_cpu)
+
+                    for i, bm in enumerate(objs):
+                        bm["real_time"] = wall_times[i] / n_wall
+                        bm["cpu_time"] = cpu_times[i] / n_cpu
                         bm["repetition_index"] = i
-                        bm["iterations"] = number
+                        bm["iterations"] = n_wall
+
+                    benchmarks += objs
+
+                except Exception as e:
+                    # conform to GBM spec
+                    # return single result, set timings to zero, add error message
+                    return_obj = objs[0]
+                    return_obj["real_time"] = return_obj["cpu_time"] = 0.0
+                    return_obj["error_occurred"] = True
+                    return_obj["error_message"] = str(e)
+
+                    benchmarks += [return_obj]
 
             json_obj["benchmarks"] = benchmarks
 

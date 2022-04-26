@@ -1,13 +1,13 @@
-# The builder component
+# The provider component
 
-The `Builder` class component of `pybm` is responsible for managing a Python virtual environment throughout its
+The `Provider` class component of `pybm` is responsible for managing a Python virtual environment throughout its
 lifecycle. The main lifecycle management aspects are creation, deletion, installation and uninstallation.
 
-An abstract base class interface is the `pybm.builders.BaseBuilder`.
+An abstract base class interface is the `pybm.providers.BaseProvider`.
 
 ## Creating a virtual environment
 
-Creation of a Python virtual environment works through the `Builder.create` API.
+Creation of a Python virtual environment works through the `Provider.create` API.
 
 ```python
 def create(
@@ -36,7 +36,6 @@ environment (location, Python version, installed packages). The class definition
 class PythonSpec:
     """Dataclass representing a Python virtual environment."""
 
-    root: str = field()
     executable: str = field()
     version: str = field()
     packages: List[str] = field(default_factory=list)
@@ -47,21 +46,19 @@ class PythonSpec:
         self.packages.extend(packages)
 ```
 
-`root` is the location of the virtual environment, `executable` is the Python executable tied to the venv, `version` is
-the Python version, `packages` is the list of installed packages (with versions), `locations` is an optional list of
+`executable` is the Python executable tied to the virtual environment, `version` is the Python runtime version, 
+`packages` is the list of installed packages (with versions), and `locations` is an optional list of
 locations of extra locally installed packages.
 
 ## Deleting a virtual environment
 
-Deletion of a Python virtual environment works through the `Builder.delete` API.
+Deletion of a Python virtual environment works through the `Provider.delete` API.
 
 ```python
-def def delete(
+def delete(
     self,
-    env_dir: Union[str, Path]
-
-,
-verbose: bool = False
+    env_dir: Union[str, Path],
+    verbose: bool = False,
 ) -> None:
 ```
 
@@ -70,7 +67,7 @@ work exactly as before.
 
 ## Installing packages into a virtual environment
 
-Installing packages into a Python virtual environment works through the `Builder.install` API.
+Installing packages into a Python virtual environment works through the `Provider.install` API.
 
 ```python
 def install(
@@ -86,14 +83,14 @@ def install(
 Here, `spec` is the `PythonSpec` instance representing the virtual environment of interest. Packages can either be
 specified as a list (the `packages` argument), or from a requirements file (the `requirements_file` argument). Options
 can be passed through to the virtual environment tool with the `options` argument, the default package managing solution
-for installation with the `venv` builder is `pip install`.
+for installation with the `venv` provider is `pip install`.
 
 ## Uninstalling packages from a virtual environment
 
-Uninstalling packages from a Python virtual environment works through the `Builder.uninstall` API.
+Uninstalling packages from a Python virtual environment works through the `Provider.remove` API.
 
 ```python
-def uninstall(
+def remove(
         self,
         spec: PythonSpec,
         packages: List[str],
@@ -105,11 +102,11 @@ def uninstall(
 
 Here, `spec` is again the `PythonSpec` instance representing the virtual environment of interest. Packages are specified
 as a list (the `packages` argument). Options can be passed through to the virtual environment tool with the `options`
-argument, the default package managing solution for uninstallation with the `venv` builder is `pip uninstall`.
+argument, the default package managing solution for uninstallation with the `venv` provider is `pip uninstall`.
 
 ## Listing installed packages of a virtual environment
 
-Listing installed packages of a Python virtual environment works through the `Builder.list` API.
+Listing installed packages of a Python virtual environment works through the `Provider.list` API.
 
 ```python
 def list(

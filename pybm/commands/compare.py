@@ -1,22 +1,20 @@
 from typing import List
 
-from pybm import PybmConfig
 from pybm.command import CLICommand
-from pybm.config import get_component_class
+from pybm.config import get_component
 from pybm.reporters import BaseReporter
 from pybm.status_codes import ERROR, SUCCESS
 
 
 class CompareCommand(CLICommand):
     """
-    Report benchmark results from specified sources.
+    Report and compare benchmark results from specified sources.
     """
 
     usage = "pybm compare <refs> [<options>]\n"
 
     def __init__(self):
         super(CompareCommand, self).__init__(name="compare")
-        self.config = PybmConfig.load()
 
     def add_arguments(self):
         # positionals
@@ -45,20 +43,33 @@ class CompareCommand(CLICommand):
             default=False,
             help="Report absolute numbers instead of relative differences.",
         )
-
-        reporter: BaseReporter = get_component_class("reporter", config=self.config)
-
-        reporter_args = reporter.additional_arguments()
-
-        if reporter_args:
-            reporter_name = self.config.get_value("reporter.name")
-            reporter_group_desc = (
-                f"Additional options from configured reporter class {reporter_name!r}"
-            )
-            reporter_group = self.parser.add_argument_group(reporter_group_desc)
-            # add builder-specific options into the group
-            for arg in reporter_args:
-                reporter_group.add_argument(arg.pop("flags"), **arg)
+        self.parser.add_argument(
+            "--target-filter",
+            type=str,
+            default=None,
+            metavar="<regex>",
+            help="Regex filter to selectively filter benchmark target files. If "
+            "specified, only benchmark files matching the given regex will be "
+            "included in the report.",
+        )
+        self.parser.add_argument(
+            "--benchmark-filter",
+            type=str,
+            default=None,
+            metavar="<regex>",
+            help="Regex filter to selectively report benchmarks from the matched "
+            "target files. If specified, only benchmarks matching the given regex "
+            "will be included in the report.",
+        )
+        self.parser.add_argument(
+            "--context-filter",
+            type=str,
+            default=None,
+            metavar="<regex>",
+            help="Regex filter for additional context to report from the benchmarks. "
+            "If specified, context values matching the given regex will be included "
+            "in the report.",
+        )
 
     def run(self, args: List[str]) -> int:
         if not args:
@@ -69,7 +80,7 @@ class CompareCommand(CLICommand):
 
         options = self.parser.parse_args(args)
 
-        reporter: BaseReporter = get_component_class("reporter", config=self.config)
+        reporter: BaseReporter = get_component("reporter")
 
         refs: List[str] = options.refs
         previous: int = options.include_previous

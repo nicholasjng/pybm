@@ -3,7 +3,6 @@ from typing import List, Optional, Dict, Any
 
 import pybm.runners.util as runner_util
 from pybm import PybmError
-from pybm.config import PybmConfig
 from pybm.runners.base import BaseRunner
 from pybm.specs import Package
 from pybm.util.common import lfilter
@@ -24,48 +23,17 @@ class GoogleBenchmarkRunner(BaseRunner):
     in pybm using Google Benchmark's Python bindings.
     """
 
-    def __init__(self, config: PybmConfig):
+    def __init__(self):
         if not GBM_INSTALLED:
             raise PybmError(
-                "Missing dependencies. You attempted to use the "
-                "Google Benchmark runner without having the "
-                "required dependencies installed. To do so, "
+                "Missing dependencies. You attempted to use the Google Benchmark "
+                "runner without having the required dependencies installed. To do so, "
                 "please run the command `pybm env install root "
                 f"{' '.join([str(p) for p in self.required_packages])}` while "
-                f"inside your root virtual environment.\n "
-                f"BEWARE: As of 10/2021, Google Benchmark does "
-                f"not have source wheels available for any "
-                f"platforms outside of Linux, and Python versions "
-                f"outside of Python 3.6-3.8. If you want to use "
-                f"Google Benchmark on any platform or Python "
-                f"interpreter outside this group, you will have "
-                f"to build the wheel from source. This requires "
-                f"Bazel; for information on Bazel installation, see "
-                f"https://docs.bazel.build/versions/4.2.1/install.html."
+                f"inside your root virtual environment."
             )
 
-        super().__init__(config=config)
-
-    def additional_arguments(self):
-        return [
-            {
-                "flags": "--enable-random-interleaving",
-                "action": "store_true",
-                "default": False,
-                "help": "Whether to enable the random interleaving feature in Google "
-                "Benchmark. This can reduce run-to-run variance by running benchmarks "
-                "in random order.",
-            },
-            {
-                "flags": "--report-aggregates-only",
-                "action": "store_true",
-                "default": False,
-                "help": "Whether to report aggregates (mean/stddev) only instead of "
-                "the raw data in Google Benchmark. If you uncheck this option, "
-                "mean/median/stddev aggregates are still reported if the number of "
-                "benchmark repetitions is greater than 1.",
-            },
-        ]
+        super().__init__()
 
     @property
     def required_packages(self) -> List[Package]:
