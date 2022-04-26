@@ -89,11 +89,14 @@ def flatten(t):
     return [item for sublist in t for item in sublist]
 
 
-def partition_n(n: int, fn: Callable[[T], int], listlike: Iterable[T]) -> List[List[T]]:
+def partition_n(n: int, fn: Callable[[T], int], iterable: Iterable[T]) -> List[List[T]]:
+    if n == 1:
+        return [[elem for elem in iterable]]
+
     # explicit list comprehension to avoid identical object IDs
     partitions: List[List[T]] = [[] for _ in range(n)]
 
-    for elem in listlike:
+    for elem in iterable:
         k = fn(elem)
         assert (
             0 <= k < n
@@ -101,3 +104,19 @@ def partition_n(n: int, fn: Callable[[T], int], listlike: Iterable[T]) -> List[L
         partitions[k].append(elem)
 
     return partitions
+
+
+def safe_index(_l: List[T], item: T) -> int:
+    try:
+        return _l.index(item)
+    except ValueError:
+        return -1
+
+
+def seek(_l: List[T], item: T) -> Tuple[List[T], ...]:
+    idx = safe_index(_l, item)
+
+    if idx == -1:
+        return _l, []
+    else:
+        return _l[:idx], _l[idx + 1 :]

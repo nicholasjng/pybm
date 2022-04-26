@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 
 from pybm.specs import Package
 
@@ -6,10 +6,10 @@ from pybm.specs import Package
 def get_extras():
     """Extra pybm functionality, specified as a valid argument to
     setuptools.setup's 'extras_require' keyword argument."""
-    extra_features = {
+    extra_features: Dict[str, List[Package]] = {
         "gbm": [
             Package("pybm", origin="https://github.com/nicholasjng/pybm"),
-            Package("google-benchmark", origin="https://github.com/google/benchmark"),
+            Package("google-benchmark"),
         ]
     }
     # be explicit here for mypy

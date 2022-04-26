@@ -2,7 +2,7 @@ import re
 import typing
 from functools import partial
 from pathlib import Path
-from typing import Tuple, Dict, Union, Optional
+from typing import Tuple, Dict, Union, Optional, List
 
 if typing.TYPE_CHECKING:
     # Literal exists only from Python 3.8 onwards
@@ -17,13 +17,79 @@ from pybm.util.subprocess import run_subprocess
 git_subprocess = partial(run_subprocess, ex_type=GitError)
 
 
-def get_git_version() -> Tuple[int, ...]:
+def _feature_guard(command: str, min_git: Tuple[int, int, int]):
+    if GIT_VERSION < min_git:
+        min_git_str = version_string(min_git)
+        msg = f"Command `git {command}` requires at minimum git version {min_git_str}, "
+
+        if GIT_VERSION == (0, 0, 0):
+            msg += (
+                "but no git installation was found on your system. Please ensure that "
+                "that git is installed and added to PATH."
+            )
+        else:
+            curr_git_str = version_string(GIT_VERSION)
+            msg += (
+                f"but your installed git was found to be only version {curr_git_str}."
+            )
+        raise GitError(msg)
+
+
+def checkout(ref: str, cwd: Union[str, Path]) -> None:
+    command = ["git", "checkout", ref]
+    git_subprocess(command=command, cwd=cwd)
+
+
+def disambiguate_info(info: str) -> Optional[str]:
+    attr: Optional[str] = None
+    p, pp = Path(info), Path.cwd().parent / info
+    # check if path is present in either cwd or parent
+    if p.exists() and is_git_worktree(p):
+        attr = "root"
+    elif pp.exists() and is_git_worktree(pp):
+        attr = "root"
+    elif is_valid_sha_part(info):  # check for valid (partial) object SHA
+        attr = "commit"
+    elif info in list_branches(mode="all", names_only=True):
+        # check for branch name, remote or local
+        attr = "branch"
+    elif info in list_tags():
+        attr = "tag"
+    return attr
+
+
+def get_from_history(
+    ref: str,
+    resource: Union[str, Path],
+    directory: Union[str, Path],
+    use_legacy_checkout: bool,
+) -> None:
+    """Check out a file or directory from another reference in the git history."""
+
+    if use_legacy_checkout:
+        # git <2.23: checkouts from other branches are moved to the staging area
+        command = ["git", "checkout", ref, "--", str(resource)]
+    else:
+        # Source: (requires git v2.23.0+)
+        # https://stackoverflow.com/questions/307579/how-do-i-copy-a-version-of-a-single-file-from-one-git-branch-to-another
+        command = ["git", "restore", "--source", ref, str(resource)]
+
+        _feature_guard("restore", min_git=(2, 23, 0))
+
+    # errors here (e.g. nonexistent resource) are immediately raised
+    git_subprocess(command=command, cwd=directory)
+
+    if use_legacy_checkout:
+        # remove checked out resource from staging area
+        git_subprocess(["git", "reset", "HEAD", "--", str(resource)])
+
+
+def get_git_version() -> Tuple[int, int, int]:
     rc, output = git_subprocess(["git", "--version"])
-    # leading number(s), followed by multiple (dot + group of numbers) groups
+    # leading number, followed by multiple (dot + group of digits) exprs
     version_str = re.search(r"\d+(\.\d+)+", output)
     if version_str is not None:
-        version = version_str.group()
-        return version_tuple(version)
+        return version_tuple(version_str.group())
     else:
         raise GitError("Unable to get version from git.")
 
@@ -45,29 +111,11 @@ except GitError:
 # ---------------------------------------
 
 
-def _feature_guard(command: str, min_git: Tuple[int, int, int]):
-    if GIT_VERSION < min_git:
-        min_git_str = version_string(min_git)
-        msg = f"Command `git {command}` requires at minimum git version {min_git_str}, "
-
-        if GIT_VERSION == (0, 0, 0):
-            msg += (
-                "but no git installation was found on your system. Please ensure that "
-                "that git is installed and added to PATH."
-            )
-        else:
-            curr_git_str = version_string(GIT_VERSION)
-            msg += (
-                f"but your installed git was found to be only version {curr_git_str}."
-            )
-        raise GitError(msg)
-
-
 def is_git_worktree(path: Union[str, Path]) -> bool:
     # https://stackoverflow.com/questions/2180270/check-if-current-directory-is-a-git-repository
     cmd = ["git", "rev-parse", "--is-inside-work-tree"]
-    # command exits with 1 if not inside a worktree
-    rc, _ = git_subprocess(cmd, allowed_statuscodes=[1, 128], cwd=path)
+    # command exits with 128 if not inside a worktree
+    rc, _ = git_subprocess(cmd, allowed_statuscodes=[128], cwd=path)
     return rc == 0
 
 
@@ -77,53 +125,63 @@ def is_main_worktree(path: Union[str, Path]) -> bool:
     return is_git_worktree(path) and has_git_folder
 
 
-def is_valid_sha1_part(input_str: str) -> bool:
+def is_valid_sha_part(input_str: str) -> bool:
+    # SHA256 occupy exactly 64 hexs, anything less or equal is fine
+    if len(input_str) > 64:
+        return False
+
     try:
-        # valid SHA1s can be cast to a hex integer
+        # valid SHA256s can be cast to a hex integer
         _ = int(input_str, 16)
     except ValueError:
         return False
     return True
 
 
-def resolve_ref(commit_ish: str, resolve_commits: bool):
-    ref = commit_ish
-    if commit_ish in list_tags():
-        ref_type = "tag"
-    elif commit_ish in list_branches(mode="all"):
-        # ref is a local branch name
-        ref_type = "branch"
-    elif is_valid_sha1_part(commit_ish):
-        ref_type = "commit"
-    else:
-        msg = (
-            f"Input {commit_ish!r} did not resolve to any known local "
-            f"branch, tag or valid commit SHA1."
-        )
-        raise GitError(msg)
-    # force commit resolution, leads to detached HEAD
-    if resolve_commits:
-        ref, ref_type = resolve_commit(ref), "commit"
-    return ref, ref_type
+def list_branches(
+    mode: 'Literal["local", "remote", "all"]' = "all", names_only: bool = False
+) -> List[str]:
+    command = ["git", "branch"]
+
+    if mode == "all":
+        command += ["-a"]
+    elif mode == "remote":
+        # TODO: Select remote out of multiple
+        command += ["-r"]
+
+    # name-only listing with the "format" option to `git branch`
+    command += ["--format=%(refname:short)"]
+
+    # every line is a branch name
+    rc, branch_output = git_subprocess(command)
+
+    branches: List[str] = branch_output.splitlines()
+
+    if names_only:
+        branches = list(set([b.split("/")[-1] for b in branches]))
+
+    return branches
 
 
-def list_tags():
-    rc, tags = git_subprocess(["git", "tag"])
-    return tags.splitlines()
+def list_tags() -> List[str]:
+    # every line is a tag name
+    rc, tag_output = git_subprocess(["git", "tag"])
+
+    return tag_output.splitlines()
 
 
 def map_commits_to_tags() -> Dict[str, str]:
-    """Return key-value mapping commit -> tag name"""
+    """Return key-value mapping (commit) -> (tag name)."""
+    tag_marker = "^{}"
 
-    # -d switch shows commit SHA1s pointed to by tag, marked by `^{}`
-    # https://stackoverflow.com/questions/8796522/git-tag-list-display-commit-sha1-hashes
     def process_line(line: str) -> Tuple[str, str]:
         commit, tag = line.rstrip(tag_marker).split()
         tag = tag.replace("refs/tags/", "")
         return commit, tag
 
-    tag_marker = "^{}"
     # show-ref exits with 1 if no tags exist in the repo
+    # -d switch shows commit SHA1s pointed to by tag, marked by `^{}`
+    # https://stackoverflow.com/questions/8796522/git-tag-list-display-commit-sha1-hashes
     rc, tags = git_subprocess(
         ["git", "show-ref", "--tags", "-d"], allowed_statuscodes=[1]
     )
@@ -133,80 +191,30 @@ def map_commits_to_tags() -> Dict[str, str]:
     return dict(split_list)
 
 
-def list_branches(mode: 'Literal["local", "remote", "all"]' = "all"):
-    def format_branch(name: str):
-        name = name.lstrip(" *+")
-        return name.split("/", maxsplit=2)[-1]
-
-    command = ["git", "branch"]
-    if mode == "all":
-        command += ["-a"]
-    elif mode == "remote":
-        # TODO: Select remote out of multiple
-        command += ["-r"]
-
-    rc, output = git_subprocess(command)
-    branches = output.splitlines()
-
-    if mode != "local":
-        # filter remote HEAD tracker from output
-        branches = lfilter(lambda x: "->" not in x, branches)
-    # strip leading formatting tokens from git branch output
-    return lmap(format_branch, branches)
-
-
 def resolve_commit(ref: str) -> str:
-    if is_valid_sha1_part(ref):
+    if is_valid_sha_part(ref):
         command = ["git", "rev-parse", ref]
     else:
+        # for getting the actual commit instead of the tag SHA
         command = ["git", "rev-list", "-n", "1", ref]
+
     _, commit = git_subprocess(command)
+    # rev-parse branch output is newline-terminated
     return commit.rstrip()
 
 
-def disambiguate_info(info: str) -> Optional[str]:
-    attr: Optional[str] = None
-    p, pp = Path(info), Path.cwd().parent / info
-    # check if path is present in either cwd or parent
-    if p.exists() and is_git_worktree(p):
-        attr = "root"
-    elif pp.exists() and is_git_worktree(pp):
-        attr = "root"
-    elif is_valid_sha1_part(info):
-        attr = "commit"
-    elif info in list_branches(mode="all"):
-        attr = "branch"
-    elif info in list_tags():
-        attr = "tag"
-    return attr
-
-
-def checkout(ref: str, cwd: Union[str, Path]):
-    command = ["git", "checkout", ref]
-    git_subprocess(command=command, cwd=cwd)
-
-
-def get_from_history(
-    ref: str,
-    resource: Union[str, Path],
-    directory: Union[str, Path],
-    use_legacy_checkout: bool,
-):
-    """Check out a file or directory from another reference in the git history."""
-
-    if use_legacy_checkout:
-        # git <2.23: checkouts from other branches are moved to the staging area
-        command = ["git", "checkout", ref, "--", str(resource)]
+def resolve_ref(ref: str, resolve_commits: bool) -> Tuple[str, str]:
+    if ref in list_tags():
+        ref_type = "tag"
+    elif ref in list_branches(mode="all", names_only=True):
+        # ref is a branch name
+        ref_type = "branch"
+    elif is_valid_sha_part(ref):
+        ref_type = "commit"
     else:
-        # Source: (requires git v2.23.0+)
-        # https://stackoverflow.com/questions/307579/how-do-i-copy-a-version-of-a-single-file-from-one-git-branch-to-another
-        command = ["git", "restore", "--source", ref, str(resource)]
-
-        _feature_guard("restore", min_git=(2, 23, 0))
-
-    # errors here (e.g. nonexistent resource) are immediately raised
-    git_subprocess(command=command, cwd=directory)
-
-    if use_legacy_checkout:
-        # remove checked out resource from staging area
-        git_subprocess(["git", "reset", "HEAD", "--", str(resource)])
+        msg = f"Input {ref!r} did not resolve to any known branch, tag, or commit SHA."
+        raise GitError(msg)
+    # force commit resolution, leads to detached HEAD
+    if resolve_commits:
+        ref, ref_type = resolve_commit(ref), "commit"
+    return ref, ref_type

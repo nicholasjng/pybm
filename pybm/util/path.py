@@ -33,21 +33,34 @@ def lsdir(
     path: Union[str, Path],
     glob_pattern: Optional[str] = None,
     file_suffix: str = "",
-    rel_path: Optional[str] = None,
+    relative_to: Optional[str] = None,
     include_subdirs: bool = False,
 ) -> List[Path]:
 
     resolved_path = Path(path).resolve()
 
     glob_pattern = glob_pattern or "*" + file_suffix
-    assert isinstance(glob_pattern, str)
 
     if include_subdirs:
         glob_pattern = "**/" + glob_pattern
 
+    assert isinstance(glob_pattern, str)
+
     matching_files = resolved_path.glob(glob_pattern)
 
-    if rel_path is not None:
-        return lmap(lambda p: p.relative_to(rel_path), matching_files)  # type: ignore
+    if relative_to is not None:
+        return lmap(
+            lambda p: p.relative_to(relative_to), matching_files  # type: ignore
+        )
     else:
         return list(matching_files)
+
+
+def walk(path: Union[str, Path], absolute: bool = False):
+    for p in Path(path).iterdir():
+        if p.is_dir():
+            # defer to nested routine for the next directory
+            yield from walk(p, absolute=absolute)
+            continue
+        # yield complete path
+        yield p.resolve() if absolute else p
