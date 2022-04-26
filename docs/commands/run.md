@@ -2,21 +2,21 @@
 
 ```shell
 ➜ pybm run -h
-usage: pybm run <benchmark> <environment(s)> [<options>]
+usage: pybm run <benchmark> <workspace(s)> [<options>]
 
-    Run pybm benchmark workloads in specified environments.
+    Run pybm benchmark workloads in specified workspaces.
 
 positional arguments:
   <benchmark>           Name of the benchmark target(s) to run. Can be a path to a single file, a directory, or a glob expression. Given paths need to be relative to the worktree root.
-  <environment(s)>      Environments to run the benchmarks in. If omitted, by default, benchmarks will be run in the main environment if only one environment exists, otherwise an error will be raised,
+  <workspace(s)>      Environments to run the benchmarks in. If omitted, by default, benchmarks will be run in the main workspace if only one workspace exists, otherwise an error will be raised,
                         unless the "--all" switch is used.
 
 optional arguments:
   -h, --help            Show this message and exit.
   -v                    Enable verbose mode. Makes pybm log information that might be useful for debugging.
   -m                    Run benchmark targets as modules. Use this to benchmark code outside of a package.
-  --checkout            Run benchmarks in checkout mode in environment "root". Here, instead of persisted git worktrees, different refs are benchmarked using `git checkout` commands.
-  --all                 Run specified benchmarks in all existing pybm environments.
+  --checkout            Run benchmarks in checkout mode in workspace "root". Here, instead of persisted git worktrees, different refs are benchmarked using `git checkout` commands.
+  --all                 Run specified benchmarks in all existing pybm workspaces.
   -S <git-ref>, --source <git-ref>
                         Source benchmark targets from a different git reference.
   --repetitions <reps>  Number of repetitions for the target benchmarks.
@@ -25,39 +25,39 @@ optional arguments:
 ```
 
 The `pybm run` command is perhaps the heart of `pybm`'s functionality. It is responsible for discovering, dispatching
-and running the appropriate benchmarks across the chosen environments. There are multiple nuances to running benchmarks
+and running the appropriate benchmarks across the chosen workspaces. There are multiple nuances to running benchmarks
 in pybm, all of which will be covered now.
 
 ## Understanding the basics
 
 If you have your benchmarks under a `benchmarks` folder in your project, run all benchmarks like this, supposing you
-want to run them sequentially in environments named `my-env1` to `my-envN`:
+want to run them sequentially in workspaces named `my-workspace1` to `my-workspaceN`:
 
 ```shell
-pybm run benchmarks my-env1 my-env2 ... my-envN
+pybm run benchmarks my-workspace1 my-workspace2 ... my-workspaceN
 ```
 
-This will run the benchmarks in all the environments from my-env1 to my-envN.
+This will run the benchmarks in all the workspaces from my-workspace1 to my-workspaceN.
 
 Running a single file (let it be `foo.py`) inside a folder also works:
 
 ```shell
-pybm run benchmarks/foo.py my-env1 my-env2 ... my-envN
+pybm run benchmarks/foo.py my-workspace1 my-workspace2 ... my-workspaceN
 ```
 
 Lastly, you can also supply a glob expression:
 
 ```shell
 # runs all benchmark files starting with foo.
-pybm run benchmarks/foo*.py my-env1 my-env2 ... my-envN
+pybm run benchmarks/foo*.py my-workspace1 my-workspace2 ... my-workspaceN
 ```
 
-## Running benchmarks in all available environments
+## Running benchmarks in all available workspaces
 
-To run a benchmark in *all* available environments (list them with `pybm env list`), use the `--all` switch:
+To run a benchmark in *all* available workspaces (list them with `pybm workspace list`), use the `--all` switch:
 
 ```shell
-# runs all files in the benchmarks folder in all environments.
+# runs all files in the benchmarks folder in all workspaces.
 pybm run benchmarks --all
 ```
 
@@ -79,20 +79,20 @@ Instead of the slashes in the file path, you substitute those with dots to refle
 pybm supports running benchmark target files as modules like this:
 
 ```shell
-# runs the foo benchmark file as a module in the environment named my-env.
-pybm -m benchmarks/foo.py my-env
+# runs the foo benchmark file as a module in the workspace named my-workspace.
+pybm -m benchmarks/foo.py my-workspace
 ```
 
 Under the hood, this results in a `python -m benchmarks.foo` call, where the Python executable is sourced from the
-benchmark environment's associated virtual environment.
+benchmark workspace's associated virtual environment.
 
 ## Running benchmarks in checkout mode
 
-For some use cases, creating different benchmark environments is overkill because there is no need for custom package
+For some use cases, creating different benchmark workspaces is overkill because there is no need for custom package
 dependencies, different Python versions etc. In this case, different versions of your Python codebase can be benchmarked
 with simple `git checkout` commands.
 
-If you do not have any need for custom environments, then you can use the `--checkout` flag to run benchmarks in
+If you do not have any need for custom workspaces, then you can use the `--checkout` flag to run benchmarks in
 checkout mode:
 
 ```shell
@@ -109,7 +109,7 @@ Usually, as a rule of thumb, checkout mode can be used if:
 * Your project does not have any C extensions / libraries that need to be (re)compiled,
 * You want to use the same Python version for each of the benchmark runs.
 
-If you do happen to meet any of the above criteria, consider using dedicated benchmark environments.
+If you do happen to meet any of the above criteria, consider using dedicated benchmark workspaces.
 
 ## Sourcing benchmarks from different references in checkout mode
 
