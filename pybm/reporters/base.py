@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional, Protocol
 
-from pybm import PybmConfig
+from pybm.config import config
 
 
 class PybmIO(Protocol):
@@ -13,7 +13,7 @@ class PybmIO(Protocol):
 
 
 class BaseReporter:
-    def __init__(self, config: PybmConfig):
+    def __init__(self):
         self.result_dir: Path = Path(config.get_value("core.resultdir"))
 
         self.target_time_unit: str = config.get_value("reporter.timeunit")
@@ -23,9 +23,6 @@ class BaseReporter:
         self.shalength: int = config.get_value("reporter.shalength")
 
         self.io: Optional[PybmIO] = None
-
-    def additional_arguments(self):
-        raise NotImplementedError
 
     def compare(
         self,
