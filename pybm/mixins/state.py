@@ -1,12 +1,14 @@
 import operator
-from typing import Optional, Any
+from typing import Optional, Any, TypeVar
 
 from pybm.exceptions import PybmError
 
+_T = TypeVar("_T", covariant=True)
 
-class StateMixin:
+
+class NestedStateMixin:
     """
-    State getter and setter methods based on dotted attribute access.
+    Nested state getter and setter methods based on dotted attribute access.
 
     Usage works as follows: X.get_value("a.b") returns the nested attribute
     b on object a, which itself is a member of class X. Same for set_value.
