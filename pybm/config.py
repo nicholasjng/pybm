@@ -1,12 +1,9 @@
 import itertools
+import logging
 import os
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Union, Dict, List, Any, MutableMapping, TYPE_CHECKING, Iterable
-
-from pybm.status_codes import ERROR
-from pybm.util.common import lmap
-from pybm.util.git import get_main_worktree
 
 if TYPE_CHECKING:
     # Literal exists only from Python 3.8 onwards
@@ -14,42 +11,78 @@ if TYPE_CHECKING:
     # https://github.com/pypa/pip/blob/main/src/pip/_internal/utils/subprocess.py
     from typing import Literal
 
-import toml
+import yaml
 
 from pybm.exceptions import PybmError
-from pybm.mixins import StateMixin
-from pybm.specs import (
-    CoreGroup,
-    BuilderGroup,
-    RunnerGroup,
-    GitGroup,
-    ReporterGroup,
-    Package,
-)
+from pybm.mixins.state import NestedStateMixin
+from pybm.specs import Package
+from pybm.status_codes import ERROR
+from pybm.util.common import lmap
+from pybm.util.git import get_main_worktree
 from pybm.util.imports import import_from_module
 
 __all__ = [
     "PybmConfig",
-    "get_component_class",
+    "get_component",
     "get_runner_requirements",
+    "config",
+    "global_config",
     "LOCAL_CONFIG",
     "GLOBAL_CONFIG",
 ]
 
-CONFIG_NAME = "config.toml"
+CONFIG_NAME = "config.yaml"
 LOCAL_CONFIG = str(get_main_worktree() / Path(".pybm") / CONFIG_NAME)
 
 if os.name == "nt":
     GLOBAL_CONFIG = str(Path(os.getenv("APPDATA", "")) / "pybm" / CONFIG_NAME)
 else:
-    GLOBAL_CONFIG = str(Path(os.getenv("HOME", "")) / ".config" / "pybm" / CONFIG_NAME)
+    GLOBAL_CONFIG = str(Path.home() / ".config" / "pybm" / CONFIG_NAME)
 
 
 @dataclass
-class PybmConfig(StateMixin):
+class CoreGroup:
+    datefmt: str = "%d/%m/%Y %H:%M:%S"
+    workspacefile: str = ".pybm/workspaces.yaml"
+    logfile: str = "logs/logs.txt"
+    logfmt: str = "%(levelname)-8s [%(filename)s:%(lineno)d] %(message)s"
+    loglevel: int = logging.DEBUG
+    resultdir: str = "results"
+
+
+@dataclass
+class GitGroup:
+    basedir: str = ".."
+    legacycheckout: bool = False
+
+
+@dataclass
+class ProviderGroup:
+    name: str = "pybm.providers.PythonVenvProvider"
+    homedir: str = ""
+    autoinstall: bool = True
+
+
+@dataclass
+class RunnerGroup:
+    name: str = "pybm.runners.TimeitRunner"
+    failfast: bool = False
+    contextproviders: str = ""
+
+
+@dataclass
+class ReporterGroup:
+    name: str = "pybm.reporters.JSONConsoleReporter"
+    timeunit: str = "usec"
+    significantdigits: int = 2
+    shalength: int = 8
+
+
+@dataclass
+class PybmConfig(NestedStateMixin):
     core: CoreGroup = CoreGroup()
     git: GitGroup = GitGroup()
-    builder: BuilderGroup = BuilderGroup()
+    provider: ProviderGroup = ProviderGroup()
     runner: RunnerGroup = RunnerGroup()
     reporter: ReporterGroup = ReporterGroup()
 
@@ -101,43 +134,52 @@ class PybmConfig(StateMixin):
             msg = f"Configuration file {str(path)!r} does not exist."
 
             if str(path) == LOCAL_CONFIG:
-                msg += "Make sure to run `pybm init` to initialize pybm before use."
+                msg += " Make sure to run `pybm init` to initialize pybm before use."
             raise PybmError(msg)
 
         with open(path, "r") as config_file:
-            config_obj = toml.load(config_file)
+            config_obj = yaml.load(config_file, Loader=yaml.FullLoader)
 
         return cls.from_dict(config_obj)
 
     def save(self, path: Union[str, Path] = LOCAL_CONFIG):
         with open(path, "w") as config_file:
-            toml.dump(self.to_dict(), config_file)
+            yaml.dump(self.to_dict(), config_file)
 
     def to_dict(self) -> MutableMapping[str, Any]:
         return {k: asdict(v) for k, v in self.__dict__.items()}
 
     def to_string(self):
-        return toml.dumps(self.to_dict())
+        return yaml.dump(self.to_dict())
 
     def values(self):
         return itertools.chain(*(asdict(v).values() for v in self.__dict__.values()))
 
 
-def get_component_class(
-    kind: 'Literal["builder", "reporter", "runner"]', config: PybmConfig
-):
+if Path(LOCAL_CONFIG).exists():
+    config = PybmConfig.load()
+else:
+    config = PybmConfig()
+
+if Path(GLOBAL_CONFIG).exists():
+    global_config = PybmConfig.load(GLOBAL_CONFIG)
+else:
+    global_config = None
+
+
+def get_component(kind: 'Literal["provider", "reporter", "runner"]'):
     cls = import_from_module(config.get_value(f"{kind}.name"))
-    return cls(config)
+    return cls()
 
 
-def get_runner_requirements(config: PybmConfig) -> List[str]:
-    pkgs: List[Package] = get_component_class("runner", config).required_packages
+def get_runner_requirements() -> List[str]:
+    pkgs: List[Package] = get_component("runner").required_packages
     return lmap(str, pkgs)
 
 
 description_db: Dict[str, Dict[str, str]] = {
     "core": {
-        "datefmt": "Datetime format string used to format timestamps for environment "
+        "datefmt": "Datetime format string used to format timestamps for workspace "
         "creation and modification. For a comprehensive list of identifiers and "
         "options, check the standard library documentation on datetime.strftime: "
         "https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior.",
@@ -159,32 +201,14 @@ description_db: Dict[str, Dict[str, str]] = {
         "this purpose, but requires at minimum git version 2.23. Setting this option "
         "to 'true' allows the use of older git versions for this purpose.",
     },
-    "builder": {
-        "name": "Name of the builder class used in pybm to manage "
-        "virtual Python environments. If you want to supply your own custom builder "
-        "class, set this value to your custom subclass of pybm.builders.BaseBuilder.",
+    "provider": {
+        "name": "Name of the provider class used in pybm to manage Python virtual "
+        "environments. If you want to supply your own custom provider class, set this "
+        "value to point to your custom subclass of pybm.providers.BaseProvider.",
         "homedir": "Optional home directory containing pre-built virtual environments. "
         "The default for pybm is to create the virtual environment directly into the "
         "new git worktree, but you can also choose to link existing environments, "
         "which are assumed to be subdirectories of this location.",
-        "autoinstall": "Whether to install the configured benchmark runner's "
-        "dependencies immediately into a newly created virtual environment. Unset this "
-        "option for more granular control over the installation process.",
-        "wheelcaches": "A string of local directories separated by colons (':'), like "
-        "a Unix PATH variable, containing prebuilt wheels for Python packages. "
-        "Set this if you request a package that has no wheels for your Python version "
-        "or architecture available, and you have to build wheels yourself.",
-        "pipinstalloptions": "Comma-separated list of options passed to `pip install` "
-        "in builders using pip. Set this if you use a number of `pip install` options "
-        "consistently, and do not want to type them out in every `pybm env install`.",
-        "pipuninstalloptions": "Comma-separated list of options passed to `pip "
-        "uninstall` in builders using pip. Set this if you use a number of `pip "
-        "uninstall` options consistently, and do not want to type them out in every "
-        "`pybm env uninstall`.",
-        "venvoptions": "Comma-separated list of options for virtual environment "
-        "creation in a venv-based builder. Set this if you use a number of `python -m "
-        "venv` options consistently, and do not want to type them out in every "
-        "`pybm env create` call.",
     },
     "runner": {
         "name": "Name of the runner class used in pybm to run benchmarks inside Python "
