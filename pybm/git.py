@@ -288,7 +288,7 @@ class GitWorktreeWrapper:
                     # no value, e.g. with detached HEAD, or locked without reason
                     attr, value = line, ""
 
-                #TODO: Handle bare worktrees (disallow?)
+                # TODO: Handle bare worktrees (disallow?)
                 if attr == "worktree":
                     worktree_obj["root"] = value
                 elif attr == "HEAD":

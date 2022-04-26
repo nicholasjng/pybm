@@ -3,7 +3,6 @@ from typing import List
 
 from pybm.config import config
 from pybm.command import CLICommand
-from pybm.exceptions import GitError
 from pybm.git import GitWorktreeWrapper
 from pybm.logging import get_logger
 from pybm.mixins.filemanager import WorkspaceManagerContextMixin
@@ -79,8 +78,6 @@ class SwitchCommand(WorkspaceManagerContextMixin, CLICommand):
                 # set it in the Python object as well
                 setattr(workspace, "root", new_root)
 
-        print(
-            f"Successfully checked out {ref_type} {new_ref!r} in workspace {name!r}."
-        )
+        print(f"Successfully checked out {ref_type} {new_ref!r} in workspace {name!r}.")
 
         return SUCCESS

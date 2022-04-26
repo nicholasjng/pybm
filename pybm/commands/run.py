@@ -109,7 +109,7 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
             "value for the same key results in an error.",
         )
         self.parser.add_argument(
-            "--with-random-interleaving",
+            "--enable-random-interleaving",
             action="store_true",
             default=False,
             help="Enable random interleaving in Google Benchmark. This can reduce "

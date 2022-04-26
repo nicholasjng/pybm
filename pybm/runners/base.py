@@ -165,7 +165,7 @@ class BaseRunner:
         parser.add_argument(f"{prefix}_filter", type=str, default=None)
         parser.add_argument(f"{prefix}_context", action="append", default=None)
         parser.add_argument(
-            f"{prefix}_with_random_interleaving", type=_safe_bool, default=False
+            f"{prefix}_enable_random_interleaving", type=_safe_bool, default=False
         )
         parser.add_argument(
             f"{prefix}_report_aggregates_only", type=_safe_bool, default=False
