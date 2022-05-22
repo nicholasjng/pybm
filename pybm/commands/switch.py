@@ -1,12 +1,12 @@
 # from datetime import datetime
 from typing import List
 
-from pybm.config import config
 from pybm.command import CLICommand
+from pybm.config import config
 from pybm.git import GitWorktreeWrapper
 from pybm.logging import get_logger
 from pybm.mixins.filemanager import WorkspaceManagerContextMixin
-from pybm.status_codes import ERROR, SUCCESS
+from pybm.statuscodes import ERROR, SUCCESS
 from pybm.util.git import disambiguate_info
 
 logger = get_logger(__name__)
@@ -54,7 +54,7 @@ class SwitchCommand(WorkspaceManagerContextMixin, CLICommand):
         verbose: bool = options.verbose
 
         with self.main_context(verbose=verbose, readonly=False):
-            ref_type = disambiguate_info(new_ref)
+            new_ref_type = disambiguate_info(new_ref)
 
             workspace = self.get(name)
             old_ref = workspace.get_ref_and_type()[0]
@@ -62,22 +62,24 @@ class SwitchCommand(WorkspaceManagerContextMixin, CLICommand):
 
             if verbose:
                 print(
-                    f"Switching checkout of workspace {name!r} to {ref_type} "
+                    f"Switching checkout of workspace {name!r} to {new_ref_type} "
                     f"{new_ref!r}."
                 )
 
-            workspace.switch(ref=new_ref, ref_type=ref_type)
+            workspace.switch(ref=new_ref, ref_type=new_ref_type)
 
             if old_ref in old_root:
-                worktree = self.git_worktree.get_worktree_by_attr("root", old_root)
                 new_root = old_root.replace(old_ref, new_ref)
 
-                # `git worktree move` renames worktree root
-                self.git_worktree.move(worktree=worktree, new_path=new_root)
+                # `git worktree move` renames worktree directory
+                self.git_worktree.move("root", old_root, new_path=new_root)
 
-                # set it in the Python object as well
+                # set new root in the Python object as well before saving
                 setattr(workspace, "root", new_root)
 
-        print(f"Successfully checked out {ref_type} {new_ref!r} in workspace {name!r}.")
+        print(
+            f"Successfully checked out {new_ref_type} {new_ref!r} in workspace "
+            f"{name!r}."
+        )
 
         return SUCCESS

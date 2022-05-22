@@ -3,8 +3,8 @@ import os
 import sys
 from typing import List
 
-from pybm.exceptions import GitError, ProviderError, PybmError
-from pybm.status_codes import ERROR
+from pybm.exceptions import GitError, PybmError
+from pybm.statuscodes import ERROR
 
 
 class CustomFormatter(argparse.RawDescriptionHelpFormatter):
@@ -77,7 +77,7 @@ class CLICommand:
     def run_wrapped(self, args: List[str]):
         try:
             return self.run(args)
-        except (PybmError, GitError, ProviderError) as e:
+        except (PybmError, GitError) as e:
             sys.stderr.write(f"Error: {e}")
             sys.stderr.write(os.linesep)
             sys.exit(ERROR)

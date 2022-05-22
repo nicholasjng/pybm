@@ -1,5 +1,4 @@
-import sys
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List
 
 import pybm.runners.util as runner_util
 from pybm import PybmError
@@ -27,20 +26,21 @@ class GoogleBenchmarkRunner(BaseRunner):
         if not GBM_INSTALLED:
             raise PybmError(
                 "Missing dependencies. You attempted to use the Google Benchmark "
-                "runner without having the required dependencies installed. To do so, "
-                "please run the command `pybm env install root "
-                f"{' '.join([str(p) for p in self.required_packages])}` while "
-                f"inside your root virtual environment."
+                "runner without having the required dependencies installed. "
+                "\n"
+                "To do so, please run the command `pybm workspace install main "
+                f"{' '.join([str(p) for p in self.required_packages])}` in your "
+                f"main virtual environment."
             )
 
-        super().__init__()
+        super().__init__(name="gbm")
 
     @property
     def required_packages(self) -> List[Package]:
         return get_extras()["gbm"]
 
     def run_benchmark(
-        self, argv: Optional[List[str]] = None, module_context: Dict[str, Any] = None
+        self, argv: List[str], module_context: Dict[str, Any] = None
     ) -> int:
         def flags_parser(argv: List[str]):
             argv = gbm.initialize(argv)
@@ -48,8 +48,6 @@ class GoogleBenchmarkRunner(BaseRunner):
 
         def run_benchmarks(argv: List[str] = None):
             return gbm.run_benchmarks()
-
-        argv = argv or sys.argv
 
         # inject environment-specific context into args
         argv += self.get_current_context()

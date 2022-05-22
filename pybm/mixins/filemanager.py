@@ -1,7 +1,7 @@
 from contextlib import ExitStack, contextmanager
 from functools import partial
 from pathlib import Path
-from typing import TypeVar, Dict, ContextManager
+from typing import ContextManager, Dict, TypeVar
 
 import yaml
 
@@ -55,8 +55,8 @@ class WorkspaceManagerContextMixin:
     def get(self, value: str, verbose: bool = False) -> Workspace:
         if not self._in_main_context:
             raise PybmError(
-                "Not inside the file manager context. Workspace snapshots have not "
-                "been loaded yet, please move usage of the get() method into the main "
+                "Not inside a file manager context. Workspace snapshots have not yet "
+                "been loaded, please move usage of the get() method inside the main "
                 "file manager context."
             )
         # check for known git info, otherwise use name
@@ -93,7 +93,7 @@ class WorkspaceManagerContextMixin:
                     "init` from the root of your git repository."
                 )
             else:
-                return
+                return {}
         else:
             if verbose:
                 print(
@@ -111,11 +111,11 @@ class WorkspaceManagerContextMixin:
                     print("failed.")
                 raise
 
-            for name, info in workspaces.items():
-                self.workspaces[name] = Workspace.from_dict(info)
+            for name, obj in workspaces.items():
+                self.workspaces[name] = Workspace.deserialize(obj)
 
     def save(self, verbose: bool = False):
-        workspaces = dvmap(lambda x: x.__dict__, self.workspaces)
+        workspaces = dvmap(lambda x: x.serialize(), self.workspaces)
 
         if verbose:
             print(

@@ -4,7 +4,7 @@ from typing import Union
 from pybm.util.path import get_subdirs
 
 
-def create_rundir(result_dir: Union[str, Path]) -> Path:
+def get_rundir(result_dir: Union[str, Path]) -> Path:
     # int key prevents unexpected sorting results for more than 10
     # directories (order 1 -> 10 -> 2 -> 3 ...)
     subdirs = sorted(get_subdirs(result_dir), key=int)

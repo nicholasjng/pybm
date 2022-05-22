@@ -1,21 +1,21 @@
 """Small Git worktree wrapper for operating on a repository via Python."""
 import contextlib
 from pathlib import Path
-from typing import Optional, List, Tuple, Dict, Union, NamedTuple
+from typing import Dict, List, NamedTuple, Optional, Tuple, Union
 
 from pybm.config import config
 from pybm.exceptions import GitError
 from pybm.logging import get_logger
-from pybm.util.common import lmap, lfilter, version_string
+from pybm.util.common import lfilter, lmap, version_string
+from pybm.util.formatting import abbrev_home
 from pybm.util.git import (
     GIT_VERSION,
     disambiguate_info,
-    resolve_ref,
-    map_commits_to_tags,
     is_main_worktree,
+    map_commits_to_tags,
+    resolve_ref,
 )
 from pybm.util.path import current_folder
-from pybm.util.formatting import abbrev_home
 from pybm.util.subprocess import run_subprocess
 
 # major, minor, micro
@@ -315,7 +315,28 @@ class GitWorktreeWrapper:
 
         return lmap(_process, attr_list)
 
-    def move(self, worktree: GitWorktree, new_path: Union[str, Path]):
+    def move(
+        self,
+        attr: Optional[str],
+        info: str,
+        new_path: Union[str, Path],
+        verbose: bool = False,
+    ):
+        attr = attr or disambiguate_info(info)
+
+        if not attr:
+            # TODO: Display close matches if present
+            msg = (
+                f"Argument {info!r} was not recognized as an attribute of an existing "
+                f"worktree."
+            )
+            raise GitError(msg)
+
+        worktree = self.get_worktree_by_attr(attr, info, verbose=verbose)
+
+        if worktree is None:
+            raise GitError(f"Worktree with {attr} {info!r} does not exist.")
+
         ref, ref_type = worktree.get_ref_and_type()
         root = worktree.root
 
@@ -356,7 +377,23 @@ class GitWorktreeWrapper:
 
         return worktree
 
-    def repair(self, worktree: GitWorktree):
+    def repair(self, attr: Optional[str], info: str, verbose: bool = False):
+        # avoid expensive call if attr is given
+        attr = attr or disambiguate_info(info)
+
+        if not attr:
+            # TODO: Display close matches if present
+            msg = (
+                f"Argument {info!r} was not recognized as an attribute of an existing "
+                f"worktree."
+            )
+            raise GitError(msg)
+
+        worktree = self.get_worktree_by_attr(attr, info, verbose=verbose)
+
+        if worktree is None:
+            raise GitError(f"Worktree with {attr} {info!r} does not exist.")
+
         ref, ref_type = worktree.get_ref_and_type()
         root = worktree.root
 

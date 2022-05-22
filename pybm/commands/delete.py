@@ -1,15 +1,11 @@
-from pathlib import Path
 from typing import List
 
-from pybm.exceptions import PybmError
-from pybm.providers import BaseProvider, PythonVenvProvider
 from pybm.command import CLICommand
+from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.logging import get_logger
 from pybm.mixins.filemanager import WorkspaceManagerContextMixin
-from pybm.providers.util import get_venv_root
-from pybm.specs import PythonSpec
-from pybm.status_codes import ERROR, SUCCESS
+from pybm.statuscodes import ERROR, SUCCESS
 
 logger = get_logger(__name__)
 
@@ -52,38 +48,23 @@ class DeleteCommand(WorkspaceManagerContextMixin, CLICommand):
 
         options = self.parser.parse_args(args)
 
-        option_dict = vars(options)
-
-        # verbosity
-        verbose: bool = option_dict.pop("verbose")
-
-        # env name / git worktree info
-        identifier: str = option_dict.pop("identifier")
-        force: bool = option_dict.pop("force")
-
-        provider: BaseProvider = PythonVenvProvider()
+        # verbose mode
+        verbose: bool = options.verbose
 
         with self.main_context(verbose=verbose, readonly=False):
-            workspace = self.get(identifier, verbose=verbose)
-            name = workspace.name
+            workspace = self.get(options.identifier, verbose=verbose)
+            venv, name = workspace.venv, workspace.name
 
             if name == "main":
                 raise PybmError("The 'main' workspace cannot be removed.")
 
-            print(f"Removing matching benchmark workspace {name!r}.")
-
-            venv_root = get_venv_root(workspace.executable)
-            workspace_root = Path(workspace.root)
-
-            spec = PythonSpec(
-                executable=workspace.executable, version=workspace.version
-            )
+            print(f"Removing benchmark workspace {name!r}.")
 
             # Remove venv first if inside the worktree to avoid git problems
-            if venv_root.exists() and venv_root.parent == workspace_root:
-                provider.delete(spec, verbose=verbose)
+            if workspace.venv_in_tree():
+                venv.delete()
 
-            self.git_worktree.remove(workspace.root, force=force)
+            self.git_worktree.remove(workspace.root, force=options.force)
             self.workspaces.pop(name)
 
             print(f"Successfully removed benchmark workspace {name!r}.")

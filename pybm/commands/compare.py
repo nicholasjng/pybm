@@ -3,7 +3,9 @@ from typing import List
 from pybm.command import CLICommand
 from pybm.config import get_component
 from pybm.reporters import BaseReporter
-from pybm.status_codes import ERROR, SUCCESS
+from pybm.statuscodes import ERROR, SUCCESS
+
+time_unit_choices = ("s", "sec", "ms", "msec", "us", "usec", "ns", "nsec")
 
 
 class CompareCommand(CLICommand):
@@ -23,16 +25,14 @@ class CompareCommand(CLICommand):
             nargs="+",
             metavar="<refs>",
             help="Benchmarked refs to compare. The first given ref is treated as the "
-            "anchor ref, relative to which all differences are reported. An error is "
-            "raised if any of the given refs are not present in the run.",
+            "anchor, relative to which all differences are reported.",
         )
-
-        # optionals
         self.parser.add_argument(
             "-I",
             "--include-previous",
             type=int,
             default=1,
+            dest="previous",
             metavar="<N>",
             help="How many previous runs to including in result comparison. Defaults "
             "to 1, which compares only the latest benchmark run.",
@@ -42,6 +42,40 @@ class CompareCommand(CLICommand):
             action="store_true",
             default=False,
             help="Report absolute numbers instead of relative differences.",
+        )
+        self.parser.add_argument(
+            "--time-unit",
+            type=str,
+            default=None,
+            choices=time_unit_choices,
+            help="Time unit to display benchmark results in.",
+        )
+        self.parser.add_argument(
+            "--digits",
+            type=int,
+            default=None,
+            help="Significant digits to display for floating point results, including "
+            "time.",
+        )
+        self.parser.add_argument(
+            "--as-integers",
+            action="store_true",
+            default=False,
+            help="Display all floating point results as integers, rounding them in "
+            "the process.",
+        )
+        self.parser.add_argument(
+            "--shalength",
+            type=int,
+            default=None,
+            help="Number of hex digits to display for git reference SHA values.",
+        )
+        self.parser.add_argument(
+            "--sort-by",
+            type=str,
+            default=None,
+            help="Key and mode (asc/desc) to sort results by. Needs to be "
+            "formatted as 'key: mode' (e.g. speedup: asc).",
         )
         self.parser.add_argument(
             "--target-filter",
@@ -83,13 +117,16 @@ class CompareCommand(CLICommand):
         reporter: BaseReporter = get_component("reporter")
 
         refs: List[str] = options.refs
-        previous: int = options.include_previous
-        absolute: bool = options.absolute
 
         reporter.compare(
             *refs,
-            absolute=absolute,
-            previous=previous,
+            absolute=options.absolute,
+            previous=options.previous,
+            sort_by=options.sort_by,
+            time_unit=options.time_unit,
+            digits=options.digits,
+            as_integers=options.as_integers,
+            shalength=options.shalength,
             target_filter=options.target_filter,
             benchmark_filter=options.benchmark_filter,
             context_filter=options.context_filter,

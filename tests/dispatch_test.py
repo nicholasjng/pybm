@@ -1,6 +1,7 @@
 import re
-from pybm.util.imports import import_module_from_source
+
 from pybm.util.common import dfilter
+from pybm.util.imports import import_module_from_source
 
 
 def f():

@@ -3,12 +3,12 @@ import json
 import sys
 import time
 import timeit
-from typing import List, Any, Dict, Optional
 from contextlib import redirect_stdout
+from typing import Any, Dict, List, Optional
 
 import pybm.runners.util as runner_util
 from pybm.runners.base import BaseRunner
-from pybm.status_codes import SUCCESS
+from pybm.statuscodes import SUCCESS
 from pybm.util.common import dfilter
 from pybm.util.functions import is_valid_timeit_target
 
@@ -18,6 +18,8 @@ class TimeitRunner(BaseRunner):
     A benchmark runner class interface to dispatch benchmark runs in pybm
     using Python's builtin `timeit` module.
     """
+
+    name = "timeit"
 
     @staticmethod
     def make_context(benchmark_context: List[str]):
@@ -35,13 +37,12 @@ class TimeitRunner(BaseRunner):
 
     def run_benchmark(
         self,
-        argv: List[str] = None,
+        argv: List[str],
         module_context: Optional[Dict[str, Any]] = None,
     ) -> int:
 
         assert module_context is not None, "Module context is missing."
 
-        argv = argv or sys.argv
         executable, *flags = argv
 
         flags += self.get_current_context()
@@ -69,13 +70,19 @@ class TimeitRunner(BaseRunner):
             # TODO: Implement random interleaving option with permutations
             benchmarks = []
 
-            for name in module_targets.keys():
+            for idx, name in enumerate(module_targets.keys()):
+                # TODO: Add per_family_instance_index for parametrized benchmarks
                 benchmark_obj: Dict[str, Any] = {
                     "name": name,
+                    "family_index": idx,
                     "repetitions": repeat,
                     "repetition_index": 0,
-                    "time_unit": "s",
+                    "run_name": name,
+                    "run_type": "iteration",
                     "iterations": 0,
+                    "real_time": 0.0,
+                    "cpu_time": 0.0,
+                    "time_unit": "s",
                 }
 
                 # explicit list comprehension to get unique object IDs
@@ -114,9 +121,8 @@ class TimeitRunner(BaseRunner):
 
                 except Exception as e:
                     # conform to GBM spec
-                    # return single result, set timings to zero, add error message
+                    # return single result, add error message
                     return_obj = objs[0]
-                    return_obj["real_time"] = return_obj["cpu_time"] = 0.0
                     return_obj["error_occurred"] = True
                     return_obj["error_message"] = str(e)
 

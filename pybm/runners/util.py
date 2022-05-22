@@ -2,15 +2,15 @@ import contextlib
 import functools
 import re
 from pathlib import Path
-from typing import List, Any, Dict, Union, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pybm.exceptions import PybmError
-from pybm.util.common import lfilter, dfilter, dkfilter, lmap
+from pybm.util.common import dfilter, dkfilter, lfilter, lmap
+from pybm.util.formatting import abbrev_home
 from pybm.util.functions import is_context_provider
 from pybm.util.git import get_from_history
 from pybm.util.imports import import_from_module
 from pybm.util.path import lsdir
-from pybm.util.formatting import abbrev_home
 from pybm.workspace import Workspace
 
 

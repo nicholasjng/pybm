@@ -1,9 +1,9 @@
 import itertools
 import logging
 import os
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Union, Dict, List, Any, MutableMapping, TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, MutableMapping, Union
 
 if TYPE_CHECKING:
     # Literal exists only from Python 3.8 onwards
@@ -16,7 +16,7 @@ import yaml
 from pybm.exceptions import PybmError
 from pybm.mixins.state import NestedStateMixin
 from pybm.specs import Package
-from pybm.status_codes import ERROR
+from pybm.statuscodes import ERROR
 from pybm.util.common import lmap
 from pybm.util.git import get_main_worktree
 from pybm.util.imports import import_from_module
@@ -57,13 +57,6 @@ class GitGroup:
 
 
 @dataclass
-class ProviderGroup:
-    name: str = "pybm.providers.PythonVenvProvider"
-    homedir: str = ""
-    autoinstall: bool = True
-
-
-@dataclass
 class RunnerGroup:
     name: str = "pybm.runners.TimeitRunner"
     failfast: bool = False
@@ -82,7 +75,6 @@ class ReporterGroup:
 class PybmConfig(NestedStateMixin):
     core: CoreGroup = CoreGroup()
     git: GitGroup = GitGroup()
-    provider: ProviderGroup = ProviderGroup()
     runner: RunnerGroup = RunnerGroup()
     reporter: ReporterGroup = ReporterGroup()
 
@@ -167,7 +159,7 @@ else:
     global_config = None
 
 
-def get_component(kind: 'Literal["provider", "reporter", "runner"]'):
+def get_component(kind: 'Literal["reporter", "runner"]'):
     cls = import_from_module(config.get_value(f"{kind}.name"))
     return cls()
 
@@ -200,15 +192,6 @@ description_db: Dict[str, Dict[str, str]] = {
         "restore --source <ref> <source>`. The latter command is better suited for "
         "this purpose, but requires at minimum git version 2.23. Setting this option "
         "to 'true' allows the use of older git versions for this purpose.",
-    },
-    "provider": {
-        "name": "Name of the provider class used in pybm to manage Python virtual "
-        "environments. If you want to supply your own custom provider class, set this "
-        "value to point to your custom subclass of pybm.providers.BaseProvider.",
-        "homedir": "Optional home directory containing pre-built virtual environments. "
-        "The default for pybm is to create the virtual environment directly into the "
-        "new git worktree, but you can also choose to link existing environments, "
-        "which are assumed to be subdirectories of this location.",
     },
     "runner": {
         "name": "Name of the runner class used in pybm to run benchmarks inside Python "

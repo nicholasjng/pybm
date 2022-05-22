@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Iterable, Union, Tuple
+from typing import Iterable, List, Optional, Union
 
 from pybm.util.common import lmap
 
@@ -30,6 +30,24 @@ def format_benchmark(name: str, path_to_file: str) -> str:
     return str(target_path) + ":" + name
 
 
+def format_floating(
+    value: float, digits: int, std: Optional[float] = None, as_integers: bool = False
+) -> str:
+
+    if as_integers:
+        if std is not None:
+            res = f"{int(value)} ± {int(std)}"
+        else:
+            res = f"{int(value)}"
+    else:
+        if std is not None:
+            res = f"{value:.{digits}f} ± {std:.{digits}f}"
+        else:
+            res = f"{value:.{digits}f}"
+
+    return res
+
+
 def format_ref(ref: str, commit: str, shalength: int):
     if ref != commit:
         # ref is branch / tag
@@ -45,20 +63,8 @@ def format_relative(value: float, digits: int) -> str:
     return f"{value:+.{digits}%}"
 
 
-def format_speedup(speedup: float, digits: int) -> str:
-    return f"{speedup:.{digits}f}x"
-
-
-def format_time(time: Tuple[float, float], unit: str, digits: int) -> str:
-    tval, std = time
-
-    if unit.startswith("ns"):
-        # formatting nsecs as ints is nicer
-        res = f"{int(tval)} ± {int(std)}"
-    else:
-        res = f"{tval:.{digits}f} ± {std:.{digits}f}"
-
-    return res
+def format_speedup(speedup: float, digits: int, as_integers: bool = False) -> str:
+    return format_floating(speedup, digits=digits, as_integers=as_integers) + "x"
 
 
 def make_line(values: Iterable[str], column_widths: Iterable[int], padding: int) -> str:

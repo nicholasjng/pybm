@@ -3,45 +3,58 @@ from pathlib import Path
 from typing import List, Optional
 
 from pybm.command import CLICommand
-from pybm.config import (
-    config as local_config,
-    global_config,
-    get_component,
-    LOCAL_CONFIG,
-)
+from pybm.config import config as local_config
+from pybm.config import global_config
 from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.mixins.filemanager import WorkspaceManagerContextMixin
-from pybm.providers import BaseProvider
-from pybm.status_codes import SUCCESS
+from pybm.statuscodes import SUCCESS
 from pybm.util.git import is_main_worktree
 from pybm.util.path import get_filenames
-from pybm.workspace import Workspace, _MAIN_NAME
+from pybm.venv import PythonVenv
+from pybm.workspace import _MAIN_NAME, Workspace
 
 
 def init_default_workspace(
-    provider: Optional[BaseProvider] = None, link_only: bool = False
+    link_dir: Optional[str] = None,
+    executable: str = sys.executable,
+    install: bool = True,
+    with_dependencies: bool = True,
+    create_options: Optional[List[str]] = None,
+    install_options: Optional[List[str]] = None,
+    extra_packages: Optional[List[str]] = None,
+    verbose: bool = False,
 ) -> Workspace:
     worktree = GitWorktreeWrapper().get_main_worktree()
 
-    if not provider:
-        provider = get_component("provider")
-
-    # keep mypy happy
-    assert provider is not None
-
-    if link_only:
-        spec = provider.link(path=worktree.root)
+    # either create venv in worktree or link from outside
+    if link_dir is None:
+        in_tree = True
+        directory = worktree.root
     else:
-        spec = provider.create(executable=sys.executable, destination=worktree.root)
+        in_tree = False
+        directory = link_dir
 
-    return Workspace(name=_MAIN_NAME, worktree=worktree, spec=spec)
+    venv = PythonVenv(
+        directory=directory,
+        executable=executable,
+    ).create(options=create_options, in_tree=in_tree)
+
+    if install:
+        venv.install(
+            directory=worktree.root,
+            with_dependencies=with_dependencies,
+            extra_packages=extra_packages,
+            options=install_options,
+            verbose=verbose,
+        )
+
+    return Workspace(name=_MAIN_NAME, worktree=worktree, venv=venv)
 
 
 class InitCommand(WorkspaceManagerContextMixin, CLICommand):
     """
-    Initialize pybm in a git repository by adding a configuration file
-    and an environment list into a directory.
+    Initialize pybm by setting config values and creating a main benchmark workspace.
     """
 
     usage = "pybm init [<options>]\n"
@@ -76,12 +89,59 @@ class InitCommand(WorkspaceManagerContextMixin, CLICommand):
             "the newly created pybm configuration.",
         )
         self.parser.add_argument(
-            "--provider",
+            "--link-existing",
             type=str,
             default=None,
-            choices=("stdlib",),
-            metavar="<provider>",
-            help="Python provider to use for virtual environment setup.",
+            dest="link_dir",
+            metavar="<path>",
+            help="Link an existing Python virtual environment directory to the main "
+            "workspace.",
+        )
+        self.parser.add_argument(
+            "--no-install",
+            action="store_true",
+            default=False,
+            help="Skip project installation at the chosen git reference.",
+        )
+        self.parser.add_argument(
+            "--no-deps",
+            action="store_true",
+            default=False,
+            help="Do not install project dependencies.",
+        )
+        self.parser.add_argument(
+            "--python",
+            type=str,
+            default=sys.executable,
+            dest="executable",
+            help="Python interpreter to use for the main workspace's virtual "
+            "environment.",
+            metavar="<python>",
+        )
+        self.parser.add_argument(
+            "--create-option",
+            default=list(),
+            action="append",
+            metavar="<option>",
+            dest="create_options",
+            help="Additional creation options passed to Python's venv. "
+            "Can be used multiple times to supply multiple options.",
+        )
+        self.parser.add_argument(
+            "--install-option",
+            default=list(),
+            action="append",
+            metavar="<option>",
+            dest="install_options",
+            help="Additional installation options passed to `pip install`. "
+            "Can be used multiple times to supply multiple options.",
+        )
+        self.parser.add_argument(
+            "--extra-packages",
+            default=list(),
+            action="append",
+            metavar="<pkg-name>",
+            help="Additional packages to install into the main benchmark workspace.",
         )
 
     def run(self, args: List[str]) -> int:
@@ -92,7 +152,6 @@ class InitCommand(WorkspaceManagerContextMixin, CLICommand):
         verbose: bool = options.verbose
         skip_global: bool = options.skip_global
         overrides: List[str] = options.overrides
-        provider: BaseProvider = options.provider
 
         if verbose:
             print(f"Parsed command line options: {options}")
@@ -128,21 +187,19 @@ class InitCommand(WorkspaceManagerContextMixin, CLICommand):
 
         if options.remove_existing:
             for p in get_filenames(config_dir, file_ext=".yaml"):
-                Path(p).unlink()
-
-        # TODO: Make this dynamic from a config option / CLI option
-        error_on_exist = False
-        if Path(LOCAL_CONFIG) and error_on_exist:
-            raise PybmError(
-                "Configuration file already exists. If you want to overwrite the "
-                "existing configuration, run `pybm init --rm`."
-            )
+                (config_dir / p).unlink()
 
         local_config.save()
 
         with self.main_context(verbose=verbose, missing_ok=True, readonly=False):
             self.workspaces["main"] = init_default_workspace(
-                provider=provider, link_only=True
+                link_dir=options.link_dir,
+                executable=options.executable,
+                with_dependencies=not options.no_deps,
+                create_options=options.create_options,
+                install_options=options.install_options,
+                extra_packages=options.extra_packages,
+                verbose=verbose,
             )
 
         return SUCCESS

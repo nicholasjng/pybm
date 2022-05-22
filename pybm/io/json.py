@@ -1,19 +1,28 @@
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from pybm import PybmError
-from pybm.io.util import create_subdir, create_rundir
-from pybm.util.common import lfilter_regex, dfilter_regex, lfilter, lmap
-from pybm.util.path import lsdir
+from pybm.io.util import create_subdir, get_rundir
+from pybm.util.common import dfilter_regex, lfilter, lfilter_regex, lmap
+from pybm.util.path import get_subdirs, lsdir
 
+# these context values are protected and will always be present
 PRIVILEGED_CONTEXT = ["executable", "ref", "commit"]
+
+
+def _check_subdirs(result: Union[str, Path], refs: Tuple[str, ...]):
+    subdirs = get_subdirs(result, absolute=False)
+
+    for ref in refs:
+        if ref not in subdirs:
+            raise PybmError(f"No results exist for ref {ref!r}.")
 
 
 class JSONFileIO:
     def __init__(self, result_dir: Union[str, Path]):
-        self.rundir = create_rundir(result_dir)
+        self.rundir = get_rundir(result_dir)
         self.result_dir = result_dir
 
     def read(
@@ -29,12 +38,17 @@ class JSONFileIO:
         if not path.exists() or not path.is_dir():
             raise PybmError(f"Given path {path} does not exist or is not a directory.")
 
+        _check_subdirs(path, refs)
+
         json_files = lsdir(path=path, file_suffix=".json", include_subdirs=True)
 
-        json_files = [f for f in json_files if any(ref in f.parts for ref in refs)]
+        if len(refs) > 1:
+            json_files = [f for f in json_files if any(ref in f.parts for ref in refs)]
 
         if target_filter is not None:
-            json_files = lmap(Path, lfilter_regex(target_filter, lmap(str, json_files)))
+            json_files = lfilter_regex(
+                target_filter, lmap(str, json_files)
+            )  # type: ignore
 
         results = []
 
@@ -71,10 +85,10 @@ class JSONFileIO:
 
             results += benchmarks
 
-        # sort the results by git ref
-        return sorted(results, key=lambda x: refs.index(x["ref"]))
+        return results
 
     def write(self, ref: str, file: Union[str, Path], obj: str):
+        # TODO: Clean up rundir after exception
         self.rundir.mkdir(parents=False, exist_ok=True)
 
         subdir = create_subdir(result_dir=self.rundir, ref=ref)
@@ -82,4 +96,10 @@ class JSONFileIO:
         result_file = subdir / result_name
 
         with open(result_file, "w") as res:
-            json.dump(json.loads(obj), res)
+            try:
+                json.dump(json.loads(obj), res)
+            except json.JSONDecodeError:
+                raise PybmError(
+                    f"Could not write benchmark results to file {result_file}: "
+                    f"Unparseable JSON object {obj!r}."
+                )

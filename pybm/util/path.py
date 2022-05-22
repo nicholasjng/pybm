@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, List, Optional
+from typing import List, Optional, Union
 
 from pybm.util.common import lmap
 

@@ -1,11 +1,10 @@
 import os
 from pathlib import Path
-from typing import Union, Tuple
+from typing import Tuple, Union
 
-from pybm.exceptions import ProviderError
-from pybm.specs import PythonSpec
+from pybm.exceptions import PybmError
 from pybm.util.common import version_tuple
-from pybm.util.path import get_subdirs, get_filenames, walk
+from pybm.util.path import get_filenames, get_subdirs, walk
 from pybm.util.subprocess import run_subprocess
 
 
@@ -15,7 +14,7 @@ def get_python_version(executable: str) -> Tuple[int, int, int]:
     rc, output = run_subprocess(command, errors="ignore")
     if rc != 0:
         msg = f"Unable to get version from Python executable {executable}."
-        raise ProviderError(msg)
+        raise PybmError(msg)
     else:
         # strip away trailing newline from print statement
         return version_tuple(output.strip())
@@ -33,7 +32,7 @@ def get_venv_root(executable: Union[str, Path]) -> Path:
     return Path(executable).parents[1]
 
 
-def has_build_files(root: Union[str, Path], verbose: bool = False):
+def has_build_files(root: Union[str, Path]):
     build_files = ["setup.py", "pyproject.toml"]
 
     env_path = Path(root)
@@ -97,13 +96,6 @@ def is_valid_venv(path: Union[str, Path], verbose: bool = False) -> bool:
     if verbose:
         print("success.")
     return True
-
-
-def is_linked_venv(home: str, spec: PythonSpec):
-    root = get_venv_root(spec.executable)
-    if home != "" and root.parent == Path(home):
-        return True
-    return False
 
 
 def locate_requirements_file(path: Union[str, Path], absolute: bool = True):

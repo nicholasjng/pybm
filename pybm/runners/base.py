@@ -1,7 +1,7 @@
-from pathlib import Path
-from typing import Optional, Tuple, Callable, List, Any, Dict
-
 import argparse
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
 import pybm.runners.util as runner_util
 from pybm.config import config
 from pybm.exceptions import PybmError
@@ -19,7 +19,8 @@ ContextProvider = Callable[[], Tuple[str, str]]
 class BaseRunner:
     """Base class for all pybm benchmark runners."""
 
-    def __init__(self):
+    def __init__(self, name: str = "base"):
+        self.name = name
         self.prefix = "--benchmark"
 
         # required packages for the runner
@@ -98,6 +99,7 @@ class BaseRunner:
         # https://github.com/google/benchmark/blob/main/docs/user_guide.md#extra-context
         runner_util.validate_context(benchmark_context)
         flags += benchmark_context
+        flags += [f"--runner={self.name}"]
 
         return flags
 
@@ -158,7 +160,7 @@ class BaseRunner:
             elif s.lower() == "false":
                 return False
             else:
-                raise ValueError("illegal input")
+                raise ValueError(f"illegal input {s!r}")
 
         # parts of the general benchmark runner spec
         parser.add_argument(f"{prefix}_repetitions", type=int)
@@ -178,6 +180,6 @@ class BaseRunner:
         return self._required
 
     def run_benchmark(
-        self, argv: Optional[List[str]] = None, module_context: Dict[str, Any] = None
+        self, argv: List[str], module_context: Dict[str, Any] = None
     ) -> int:
         raise NotImplementedError

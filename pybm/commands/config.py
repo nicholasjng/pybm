@@ -1,21 +1,21 @@
 import argparse
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
-from typing import List, Mapping, Callable
+from typing import Callable, List, Mapping
 
 import yaml
 
 from pybm.command import CLICommand
-from pybm.config import PybmConfig, GLOBAL_CONFIG, LOCAL_CONFIG
+from pybm.config import GLOBAL_CONFIG, LOCAL_CONFIG, PybmConfig
 from pybm.exceptions import PybmError
-from pybm.status_codes import ERROR, SUCCESS
+from pybm.statuscodes import ERROR, SUCCESS
 from pybm.util.common import lpartition
 
 EnvSubcommand = Callable[[argparse.Namespace], int]
 
 
 class ConfigCommand(CLICommand):
-    """Display and manipulate configuration values."""
+    """Display and manipulate pybm configuration values."""
 
     usage = (
         "pybm config get <option>\n"
@@ -29,13 +29,14 @@ class ConfigCommand(CLICommand):
 
     def add_arguments(self, subcommand: str = None):
         # special version action and version kwarg
-        self.parser.add_argument(
-            "option",
-            type=str,
-            metavar="<option>",
-            help=f"Config option to {subcommand}. For a comprehensive list of options, "
-            f"run `pybm config list`.",
-        )
+        if subcommand != "list":
+            self.parser.add_argument(
+                "option",
+                type=str,
+                metavar="<option>",
+                help=f"Config option to {subcommand}. For a comprehensive list of "
+                f"options, run `pybm config list`.",
+            )
 
         if subcommand == "set":
             self.parser.add_argument(
@@ -112,10 +113,10 @@ class ConfigCommand(CLICommand):
 
     def run(self, args: List[str]):
         subcommand_handlers: Mapping[str, EnvSubcommand] = {
-            "set": self.set,
+            "describe": self.describe,
             "get": self.get,
             "list": self.list,
-            "describe": self.describe,
+            "set": self.set,
         }
 
         if not args or args[0] not in subcommand_handlers:

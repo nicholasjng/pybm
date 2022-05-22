@@ -46,8 +46,7 @@ jobs:
 
       - name: Install pybm and other Python dependencies
         run: |
-          python -m pip install wheel
-          python -m pip install .. google-benchmark
+          python -m pip install .. wheel google-benchmark
         working-directory: ${{ matrix.example }}
 
       - name: Create virtual environment with the current pybm checkout
@@ -66,6 +65,6 @@ jobs:
 
       - name: Run ${{matrix.example}} end-to-end test
         run: |
-          pybm run -m benchmarks master linear-time constant-time --checkout
+          pybm run -M benchmarks master linear-time constant-time --use-checkouts
           pybm compare master linear-time constant-time
         working-directory: ${{ matrix.example }}

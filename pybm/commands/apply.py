@@ -1,2 +1,0 @@
-class ApplyCommand:
-    pass

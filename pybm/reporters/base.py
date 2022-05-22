@@ -1,15 +1,7 @@
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Any, Optional
 
 from pybm.config import config
-
-
-class PybmIO(Protocol):
-    def read(self, *args, **kwargs):
-        ...
-
-    def write(self, *args, **kwargs):
-        ...
 
 
 class BaseReporter:
@@ -22,13 +14,18 @@ class BaseReporter:
 
         self.shalength: int = config.get_value("reporter.shalength")
 
-        self.io: Optional[PybmIO] = None
+        self.io: Any = None
 
     def compare(
         self,
         *refs: str,
         absolute: bool = False,
         previous: int = 1,
+        sort_by: str = None,
+        time_unit: str = "ns",
+        digits: int = 2,
+        as_integers: bool = False,
+        shalength: int = 8,
         target_filter: Optional[str] = None,
         benchmark_filter: Optional[str] = None,
         context_filter: Optional[str] = None
