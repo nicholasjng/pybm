@@ -1,0 +1,24 @@
+benchmarks: benchmarks
+workspaces:
+  main:
+    branch: master  # or tag or commit
+    packages:
+      - setuptools # unpinned, via PyPI
+      - jax==0.3.6  # pinned, via PyPI
+      - name: pip  # or as a tuple name/version/origin
+        version: '21.3'
+        origin: https://www.pipapo.com
+  compare:
+    tag: v0.1.2
+    packages:
+      - setuptools
+
+reporter:
+  name: console
+  options:
+    shalength: 8
+
+runner:
+  name: gbm
+  options:
+    with-random-interleaving: true

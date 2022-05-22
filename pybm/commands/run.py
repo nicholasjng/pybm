@@ -2,14 +2,15 @@ import warnings
 from pathlib import Path
 from typing import List, Optional
 
+from pybm import BaseRunner
 from pybm.command import CLICommand
 from pybm.config import config, get_component
 from pybm.exceptions import PybmError
 from pybm.mixins.filemanager import WorkspaceManagerContextMixin
 from pybm.reporters import BaseReporter
-from pybm.runners import BaseRunner
+from pybm.runners import runners
 from pybm.runners.util import discover_targets
-from pybm.status_codes import SUCCESS, ERROR
+from pybm.statuscodes import ERROR, SUCCESS
 
 
 class RunCommand(WorkspaceManagerContextMixin, CLICommand):
@@ -34,15 +35,15 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
         self.parser.add_argument(
             "workspaces",
             nargs="*",
-            default=None,
-            help="Workspaces to run the benchmarks in. If omitted, by default, "
-            "benchmarks will be run in the main workspace if only one workspace "
-            "exists, otherwise an error will be raised, unless the '--all' switch is "
-            "used.",
+            default=list(),
+            help="Workspaces to run the benchmarks in. If omitted, benchmarks will be "
+            "run in the main workspace if only one workspace exists, otherwise an "
+            "error will be raised, unless the '--all' switch is used.",
             metavar="<workspace(s)>",
         )
         self.parser.add_argument(
-            "-m",
+            "-M",
+            "--as-module",
             action="store_true",
             default=False,
             dest="run_as_module",
@@ -50,12 +51,12 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
             "of a package.",
         )
         self.parser.add_argument(
-            "--checkout",
+            "--use-checkouts",
             action="store_true",
             default=False,
-            help="Run benchmarks in checkout mode in workspace 'root'. Here, instead "
-            "of persisted git worktrees, different refs are benchmarked using `git "
-            "checkout` commands.",
+            help="Run benchmarks in checkout mode in the main workspace. Here, instead "
+            "of with persisted git worktrees, different refs are benchmarked using "
+            "`git checkout` commands.",
         )
         self.parser.add_argument(
             "--all",
@@ -90,10 +91,9 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
             help="Number of times to repeat the target benchmarks.",
         )
         self.parser.add_argument(
-            "--filter",
+            "--benchmark-filter",
             type=str,
             default=None,
-            dest="benchmark_filter",
             metavar="<regex>",
             help="Regular expression to selectively filter benchmarks by name in the "
             "target files.",
@@ -120,7 +120,7 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
             action="store_true",
             default=False,
             help="Report only aggregates (mean/stddev) instead of the raw data in "
-            "Google Benchmark. If you uncheck this option,  aggregates will still be "
+            "Google Benchmark. If you uncheck this option, aggregates will still be "
             "reported if the number of benchmark repetitions is greater than 1.",
         )
 
@@ -133,10 +133,12 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
         options = self.parser.parse_args(args)
         runner_options = vars(options)
 
-        runner: BaseRunner = runner_options.pop("runner")
+        runner_name = runner_options.pop("runner")
 
-        if not runner:
-            runner = get_component("runner")
+        if not runner_name:
+            runner: BaseRunner = get_component("runner")
+        else:
+            runner = runners[runner_name]()
 
         reporter: BaseReporter = get_component("reporter")
 
@@ -145,9 +147,9 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
 
         verbose: bool = runner_options.pop("verbose")
 
-        env_ids: List[str] = runner_options.pop("workspaces") or []
+        workspace_ids: List[str] = runner_options.pop("workspaces")
         run_all: bool = runner_options.pop("run_all")
-        checkout_mode: bool = runner_options.pop("checkout")
+        use_checkouts: bool = runner_options.pop("use_checkouts")
         source_ref: Optional[str] = runner_options.pop("source_ref")
         source_path = Path(runner_options.pop("benchmarks"))
         run_as_module: bool = runner_options.pop("run_as_module")
@@ -164,22 +166,23 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
                 f"specify the targets by a path relative to the workspace root."
             )
 
-        if len(env_ids) > 0:
+        if len(workspace_ids) > 0:
             if run_all:
                 raise PybmError(
                     "The --all switch can only be used as a substitute for specific "
                     "workspace IDs, but the following workspaces were requested: "
-                    f"{', '.join(env_ids)}. Please either omit the --all switch or "
-                    f"the specific workspace IDs."
+                    f"{', '.join(workspace_ids)}. Please either omit the --all switch "
+                    f"or the specific workspace IDs."
                 )
         else:
-            if checkout_mode:
+            if use_checkouts:
                 raise PybmError(
                     "When running in checkout mode, please specify at least one valid "
                     "git reference to benchmark. To benchmark the current checkout in "
                     f"the main workspace, run `pybm run {source_path} main`."
                 )
 
+        with self.main_context(verbose=verbose, readonly=True):
             if not run_all and len(self.workspaces) > 1:
                 raise PybmError(
                     "No workspaces were given as positional arguments to `pybm run`, "
@@ -188,22 +191,22 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
                     "explicitly when calling `pybm run`, or use the --all switch."
                 )
 
-        with self.main_context(verbose=verbose, readonly=True):
             if run_all:
-                env_ids = list(self.workspaces.keys())
+                workspace_ids = list(self.workspaces.keys())
 
             # in order to revert to original checkout after benchmarks
             workspace = self.get("main", verbose=verbose)
-            root_checkout = workspace.get_ref_and_type()
+            main_checkout = workspace.get_ref_and_type()
 
-            for env_id in env_ids:
-                if checkout_mode:
+            for w_id in workspace_ids:
+                if use_checkouts:
                     # check out given reference into main worktree
-                    workspace.switch(ref=env_id)
+                    workspace.switch(ref=w_id)
                 else:
-                    workspace = self.get(env_id, verbose=verbose)
+                    workspace = self.get(w_id, verbose=verbose)
 
                 ref, ref_type = workspace.get_ref_and_type()
+                name = workspace.name
 
                 runner.check_required_packages(workspace=workspace)
 
@@ -218,24 +221,15 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
                     if n > 0:
                         print(
                             f"Found a total of {n} benchmark targets for {ref_type} "
-                            f"{ref!r} in workspace {workspace.name!r}."
+                            f"{ref!r} in workspace {name!r}."
                         )
                     else:
-                        msg = (
-                            f"Benchmark selector {str(source_path)!r} did not match "
-                            f"any directory or Python files for {ref_type} {ref!r} "
-                            f"in workspace {workspace.name!r}."
+                        warnings.warn(
+                            f"Benchmark selector {source_path} did not match any "
+                            f"directory or Python files for {ref_type} {ref!r} in "
+                            f"workspace {name!r}."
                         )
-
-                        if runner.fail_fast:
-                            error_msg = (
-                                "Aborted benchmark run because fast failure mode was "
-                                "enabled."
-                            )
-                            raise PybmError("\n".join([msg, error_msg]))
-                        else:
-                            warnings.warn(msg)
-                            continue
+                        continue
 
                     for i, benchmark in enumerate(benchmark_targets):
                         print(f"[{i + 1}/{n}] Running benchmark {benchmark}.....")
@@ -258,10 +252,10 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
 
                         reporter.write(ref, benchmark, data)
 
-            if checkout_mode:
-                root_ref, root_type = root_checkout
-                print(f"Reverting checkout to {root_type} {root_ref!r}.")
-                workspace.switch(ref=root_ref, ref_type=root_type)
+            if use_checkouts:
+                main_ref, main_type = main_checkout
+                print(f"Reverting checkout to {main_type} {main_ref!r}.")
+                workspace.switch(ref=main_ref, ref_type=main_type)
 
         print("Finished benchmarking in all specified workspaces.")
 

@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Optional, List
+from typing import List, Optional
 
 from pybm.command import CLICommand
 from pybm.exceptions import CommandError, PybmError

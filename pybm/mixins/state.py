@@ -1,5 +1,5 @@
 import operator
-from typing import Optional, Any, TypeVar
+from typing import Any, Optional, TypeVar
 
 from pybm.exceptions import PybmError
 

@@ -5,7 +5,7 @@ from importlib.abc import Loader
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import ModuleType
-from typing import Callable, Union, Optional
+from typing import Callable, Optional, Union
 
 from pybm.exceptions import PybmError
 

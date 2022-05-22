@@ -1,10 +1,12 @@
 import re
-from typing import List, Iterable, Tuple, Callable, TypeVar, Dict
+from typing import Callable, Dict, Iterable, List, Tuple, TypeVar, Union
 
 T = TypeVar("T")
 S = TypeVar("S")
 U = TypeVar("U")
 V = TypeVar("V")
+
+HasIndexMethod = Union[List[T], Tuple[T, ...]]
 
 
 def lmap(fn: Callable[[S], T], iterable: Iterable[S]) -> List[T]:
@@ -106,17 +108,16 @@ def partition_n(n: int, fn: Callable[[T], int], iterable: Iterable[T]) -> List[L
     return partitions
 
 
-def safe_index(_l: List[T], item: T) -> int:
+def safe_index(_l: HasIndexMethod[T], item: T, mode: str = "append") -> int:
     try:
         return _l.index(item)
     except ValueError:
-        return -1
-
-
-def seek(_l: List[T], item: T) -> Tuple[List[T], ...]:
-    idx = safe_index(_l, item)
-
-    if idx == -1:
-        return _l, []
-    else:
-        return _l[:idx], _l[idx + 1 :]
+        if mode == "append":
+            pos = len(_l)
+        elif mode == "prepend":
+            pos = -1
+        else:
+            raise ValueError(
+                "'mode' argument needs to be either 'append' or " "'prepend'."
+            )
+        return pos

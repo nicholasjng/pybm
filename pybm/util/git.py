@@ -2,7 +2,7 @@ import re
 import typing
 from functools import partial
 from pathlib import Path
-from typing import Tuple, Dict, Union, Optional, List
+from typing import Dict, List, Optional, Tuple, Union
 
 if typing.TYPE_CHECKING:
     # Literal exists only from Python 3.8 onwards
@@ -11,7 +11,7 @@ if typing.TYPE_CHECKING:
     from typing import Literal
 
 from pybm.exceptions import GitError
-from pybm.util.common import lmap, lfilter, version_tuple, version_string
+from pybm.util.common import lfilter, lmap, version_string, version_tuple
 from pybm.util.subprocess import run_subprocess
 
 git_subprocess = partial(run_subprocess, ex_type=GitError)
@@ -94,14 +94,6 @@ def get_git_version() -> Tuple[int, int, int]:
         raise GitError("Unable to get version from git.")
 
 
-def get_main_worktree() -> Path:
-    # this gives the absolute location of the main git folder
-    command = ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]
-    rc, output = git_subprocess(command)
-    # ergo, parent folder is the target directory
-    return Path(output.rstrip()).parent
-
-
 # Current git version
 # ---------------------------------------
 try:
@@ -109,6 +101,14 @@ try:
 except GitError:
     GIT_VERSION = (0, 0, 0)
 # ---------------------------------------
+
+
+def get_main_worktree() -> Path:
+    # this gives the absolute location of the main git folder
+    command = ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]
+    rc, output = git_subprocess(command)
+    # ergo, parent folder is the target directory
+    return Path(output.rstrip()).parent
 
 
 def is_git_worktree(path: Union[str, Path]) -> bool:
@@ -212,8 +212,9 @@ def resolve_ref(ref: str, resolve_commits: bool) -> Tuple[str, str]:
     elif is_valid_sha_part(ref):
         ref_type = "commit"
     else:
-        msg = f"Input {ref!r} did not resolve to any known branch, tag, or commit SHA."
-        raise GitError(msg)
+        raise GitError(
+            f"Input {ref!r} did not resolve to any known branch, tag, or commit SHA."
+        )
     # force commit resolution, leads to detached HEAD
     if resolve_commits:
         ref, ref_type = resolve_commit(ref), "commit"

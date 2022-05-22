@@ -2,24 +2,24 @@
 
 ## What is pybm?
 
-**pybm** is a Python CLI for repeatable, declarative benchmarking of Python code inside a git repository. It uses git's
-version control mechanisms to track changes in performance between points of interest in git history. Out of many
+**pybm** is a Python CLI for reproducible benchmarking of Python code inside a git repository. It uses git's
+version control features to track changes in performance between points of interest in git history. Out of many
 possible use cases, three specific ones immediately emerge:
 
-- Comparing performance of a feature branch to the current development branch.
-- Tracking changes in performance across git history (e.g. releases, refactors).
-- Adding a benchmarking step into a continuous integration (CI) pipeline, and rejecting changes if they reduce
+- Comparing performance of a feature branch (e.g. a pull request on GitHub) to the current development branch.
+- Tracking changes in performance across the git history (e.g. releases, refactors).
+- Adding a benchmarking step to a continuous integration (CI) workflow, and rejecting changes if they reduce
   performance to a significant degree.
 
 ## Notable features
 
 The main concepts of pybm are:
 
-- Creation and management of benchmark environments, consisting of a git reference (commit/branch/tag) and an associated
-  Python virtual environment containing the desired dependencies.
-- Running benchmarks inside an environment, with optional filtering, additional context information, and user-specific
+- Creation and management of workspaces, consisting of a git reference (commit/branch/tag) and an associated
+  Python virtual environment with the desired dependencies.
+- Running benchmarks inside a workspace, with optional filtering, additional context information, and user-specific
   metrics tracking.
-- Reporting results in direct comparison between environments to find and quantify performance changes.
+- Reporting results in direct comparison between workspaces to find and quantify performance changes.
 
 ## Installation
 
@@ -37,19 +37,18 @@ way to install pybm is through use of pip and git in the way above.
 Initialize `pybm` inside your Python git repository:
 
 ```shell
-# location: /path/to/python-project
+# Inside your project's main directory
 pybm init
 ```
 
-If you need to maintain different requirements between different git references, create a new benchmark environment and
-install your requirements:
+If you need to maintain different requirements between different git references, create a new workspace and install
+your requirements:
 
 ```shell
-pybm env create my-ref my-env
-pybm env install my-env -r my-requirements.txt
+pybm create my-ref my-workspace
 ```
 
-Now, locate your benchmarks. To each of your benchmark files, simply add the following small module execution block:
+Now, locate your benchmarks. To each of your benchmark files, simply add the following small execution block:
 
 ```python
 # benchmark.py
@@ -73,7 +72,7 @@ if __name__ == "__main__":
 
 This way, `pybm` can properly process the information and requirements for each benchmark environment individually.
 
-Now, to run your benchmarks, there are two options:
+There are two options to run your benchmarks:
 
 1) With custom requirements and environments,
 
@@ -81,7 +80,7 @@ Now, to run your benchmarks, there are two options:
 # folders or glob expressions also work for benchmark discovery.
 
 # or use --all to run in all existing environments
-pybm run benchmark.py my-env1 my-env2 [...] my-envN
+pybm run benchmark.py my-workspace1 my-workspace2 [...] my-workspaceN
 ```
 
 or
@@ -95,18 +94,17 @@ pybm run benchmark.py my-ref1 my-ref2 [...] my-refN --checkout
 If you did not install your Python package locally, consider running your benchmarks in module mode:
 
 ```shell
-pybm run -m benchmark.py my-ref1 [...] my-refN --checkout
+pybm run benchmark.py my-ref1 [...] my-refN --as-module --checkout
 ```
 
 ## Requirements
 
-The most central requirement to **pybm** is `git`, a version control system, which is responsible for building benchmark
-environments. Currently, at least `git version 2.17.0` (April 2018) is required for pybm to work correctly. To check
-your git version, run `git --version`, which should result in an output showing the version number, similar to the one
-above.
+The most central requirement to **pybm** is `git`, which is responsible for building benchmark workspaces. Currently,
+at least `git version 2.17.0` (April 2018) is required for pybm to work correctly. To check your current git version,
+run `git --version`, which should result in an output showing the version number, similar to the one above.
 
 On the Python side, in its most standard configuration, **pybm** works almost entirely within the Python standard
-library - only the `toml` package is required for configuration management. Additional functionality is available via
+library - only the `pyyaml` package is required for configuration management. Additional functionality is available via
 extras installation:
 
 ```
@@ -119,8 +117,8 @@ status, check the Issues tab and the upcoming milestones.
 
 ## Documentation and examples
 
-For some additional documentation on pybm commands, check the [docs](docs)
-section. For introductory examples in the form of step-by-step walkthroughs, refer to the [examples](examples) section.
+For some additional documentation on pybm commands, check the [docs](docs) section. For introductory examples in the
+form of step-by-step walkthroughs, refer to the [examples](examples) section.
 
 ## Current status
 

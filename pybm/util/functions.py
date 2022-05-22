@@ -1,5 +1,5 @@
 import inspect
-from typing import Callable, Tuple, Any
+from typing import Any, Callable, Tuple
 
 
 def is_context_provider(func: Callable) -> bool:

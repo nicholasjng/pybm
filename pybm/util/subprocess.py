@@ -2,6 +2,7 @@ import subprocess
 import typing
 from pathlib import Path
 from typing import List, Tuple, Union
+
 from pybm.exceptions import PybmError
 
 if typing.TYPE_CHECKING:

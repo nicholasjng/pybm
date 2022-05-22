@@ -1,12 +1,13 @@
-from typing import Tuple, Optional, List
+from pathlib import Path
+from typing import Optional, Tuple, Union
 
 from pybm.exceptions import GitError
 from pybm.git import GitWorktree
-from pybm.specs import PythonSpec
-from pybm.util.git import disambiguate_info, checkout, resolve_commit
 from pybm.util.formatting import abbrev_home
+from pybm.util.git import checkout, disambiguate_info, resolve_commit
 from pybm.util.subprocess import run_subprocess
-
+from pybm.util.venv import get_executable, get_venv_root
+from pybm.venv import PythonVenv
 
 _MAIN_NAME = "main"
 
@@ -17,9 +18,11 @@ class Workspace:
     provided Python environment for benchmarking.
     """
 
-    def __init__(self, name: str, worktree: GitWorktree, spec: PythonSpec):
+    def __init__(self, name: str, worktree: GitWorktree, venv: PythonVenv):
         # name to reference from the command line
         self.name = name
+
+        self.worktree = worktree
 
         # git worktree information
         self.root = worktree.root
@@ -27,36 +30,33 @@ class Workspace:
         self.branch = worktree.branch
         self.tag = worktree.tag
 
+        self.venv = venv
+
         # Python virtual environment configuration
-        self.executable = spec.executable
-        self.version = spec.version
-        self.packages = spec.packages
-        self.locations = spec.locations
+        self.executable = venv.executable
+        self.version = venv.version
+        self.packages = venv.packages
+        self.locations = venv.locations
 
     @classmethod
-    def from_dict(cls, info):
-        name = info["name"]
-
-        root = info["root"]
-        commit = info["commit"]
-        branch = info["branch"]
-        tag = info["tag"]
+    def deserialize(cls, obj):
+        name = obj["name"]
+        root = obj["root"]
+        commit = obj["commit"]
+        branch = obj["branch"]
+        tag = obj["tag"]
 
         worktree = GitWorktree(root=root, commit=commit, branch=branch, tag=tag)
 
-        executable = info["executable"]
-        version = info["version"]
-        packages = info["packages"]
-        locations = info["locations"]
+        executable = obj["executable"]
+        directory = get_venv_root(executable)
+        version = obj["version"]
 
-        spec = PythonSpec(
-            executable=executable,
-            version=version,
-            packages=packages,
-            locations=locations,
-        )
+        venv = PythonVenv(
+            directory=directory, executable=executable, version=version
+        ).update()
 
-        return Workspace(name=name, worktree=worktree, spec=spec)
+        return Workspace(name=name, worktree=worktree, venv=venv)
 
     def clean(self):
         command = ["git", "clean", "-fd"]
@@ -70,19 +70,28 @@ class Workspace:
         else:  # commit is always not None
             return self.commit, "commit"
 
-    def get_spec(self) -> PythonSpec:
-        return PythonSpec(
-            executable=self.executable,
-            version=self.version,
-            packages=self.packages,
-            locations=self.locations,
-        )
-
     def has_untracked_files(self):
         """Check whether a git worktree has untracked files."""
         command = ["git", "ls-files", "--others", "--exclude-standard"]
         _, output = run_subprocess(command=command, ex_type=GitError, cwd=self.root)
         return output != ""
+
+    def link(self, directory: Union[str, Path]):
+        executable = get_executable(directory)
+        venv = PythonVenv(directory=directory, executable=executable).update()
+
+        self.executable = executable
+        self.packages = venv.packages
+        self.locations = venv.locations
+        self.venv = venv
+
+    def serialize(self):
+        obj = self.__dict__
+
+        obj.pop("worktree")
+        obj.pop("venv")
+
+        return obj
 
     def switch(self, ref: str, ref_type: Optional[str] = None):
         old_ref, old_type = self.get_ref_and_type()
@@ -106,28 +115,5 @@ class Workspace:
 
         self.commit = resolve_commit(ref)
 
-    def list(self) -> Tuple[List[str], List[str]]:
-        if self.executable == "":
-            return [], []
-
-        command = [self.executable, "-m", "pip", "list"]
-
-        rc, pip_output = run_subprocess(command)
-
-        # split off table header, separator from `pip list` output
-        flat_pkg_table = pip_output.splitlines()[2:]
-        packages, locations = [], []
-
-        for line in flat_pkg_table:
-            # TODO: When using pybm.Packages here, change to --format=json to parse
-            #  directly
-            package, version, *loc = line.split()[:2]
-            packages.append("==".join((package, version)))
-            if loc:
-                locations.append(":".join((package, *loc)))
-
-        return packages, locations
-
-    def update_packages(self):
-        self.packages, self.locations = self.list()
-        return self
+    def venv_in_tree(self):
+        return get_venv_root(self.executable).parent == Path(self.root)

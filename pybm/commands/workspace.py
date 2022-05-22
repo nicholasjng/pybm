@@ -1,23 +1,21 @@
 import argparse
 import sys
+from typing import Callable, List, Mapping
 
-from typing import List, Callable, Mapping
-
-from pybm.exceptions import ProviderError, PybmError
-from pybm.providers import BaseProvider, PythonVenvProvider
 from pybm.command import CLICommand
 from pybm.config import PybmConfig
+from pybm.exceptions import PybmError
 from pybm.git import GitWorktreeWrapper
 from pybm.logging import get_logger
 from pybm.mixins.filemanager import WorkspaceManagerContextMixin
-from pybm.specs import EmptyPythonSpec
-from pybm.status_codes import ERROR, SUCCESS
+from pybm.statuscodes import ERROR, SUCCESS
 from pybm.util.formatting import (
     abbrev_home,
     calculate_column_widths,
     make_line,
     make_separator,
 )
+from pybm.venv import PythonVenv
 from pybm.workspace import Workspace
 
 logger = get_logger(__name__)
@@ -41,9 +39,6 @@ class WorkspaceCommand(WorkspaceManagerContextMixin, CLICommand):
     def __init__(self):
         config = PybmConfig.load()
         super().__init__(name="workspace")
-
-        # git worktree wrapper and provider class
-        self.git_worktree = GitWorktreeWrapper()
 
         # relevant config attributes
         self.datefmt = config.get_value("core.datefmt")
@@ -87,7 +82,7 @@ class WorkspaceCommand(WorkspaceManagerContextMixin, CLICommand):
                 "name",
                 metavar="<name>",
                 help="Information that uniquely identifies the workspace. Can be "
-                "name, checked out (partial) commit/branch/tag, or worktree directory.",
+                "name, checked out partial commit/branch/tag, or worktree directory.",
             )
             self.parser.add_argument(
                 "path",
@@ -132,23 +127,15 @@ class WorkspaceCommand(WorkspaceManagerContextMixin, CLICommand):
         verbose: bool = option_dict.pop("verbose")
 
         # env name / git worktree info
-        info: str = option_dict.pop("identifier")
+        info: str = option_dict.pop("name")
 
         packages: List[str] = option_dict.pop("packages")
         install_options: List[str] = option_dict.pop("options")
 
-        provider: BaseProvider = PythonVenvProvider()
-
         with self.main_context(verbose=verbose, readonly=False):
             workspace = self.get(info)
-
-            provider.add(
-                workspace=workspace,
-                packages=packages,
-                options=install_options,
-                verbose=verbose,
-            )
-            workspace.update_packages()
+            venv = workspace.venv
+            venv.add(packages=packages, options=install_options).update()
 
         return SUCCESS
 
@@ -160,19 +147,11 @@ class WorkspaceCommand(WorkspaceManagerContextMixin, CLICommand):
         # env name / git worktree info
         info: str = option_dict.pop("identifier")
 
-        path: str = option_dict.pop("path")
-
-        provider: BaseProvider = PythonVenvProvider()
+        directory: str = option_dict.pop("path")
 
         with self.main_context(verbose=verbose, readonly=False):
             workspace = self.get(info)
-
-            spec = provider.link(path=path, verbose=verbose)
-
-            # TODO: Provide an official API here, this approach sucks
-            workspace.executable = spec.executable
-            workspace.version = spec.version
-            workspace.update_packages()
+            workspace.link(directory=directory)
 
         return SUCCESS
 
@@ -198,7 +177,7 @@ class WorkspaceCommand(WorkspaceManagerContextMixin, CLICommand):
                 values = [workspace.name]
                 values.extend(workspace.get_ref_and_type())
                 values.append(abbrev_home(root))
-                values.append(workspace.version)
+                values.append(str(workspace.version))
                 env_data.append(values)
 
             column_widths = calculate_column_widths(env_data)
@@ -214,33 +193,27 @@ class WorkspaceCommand(WorkspaceManagerContextMixin, CLICommand):
         option_dict = vars(options)
 
         verbose: bool = option_dict.pop("verbose")
-        force_creation: bool = option_dict.pop("force_create_env")
+        # force_creation: bool = option_dict.pop("force_create_env")
 
-        provider: BaseProvider = PythonVenvProvider()
+        git_worktree = GitWorktreeWrapper()
 
         with self.main_context(verbose=verbose, readonly=False):
-            for i, worktree in enumerate(self.git_worktree.list()):
+            for i, worktree in enumerate(git_worktree.list()):
                 try:
                     self.get(worktree.root, verbose=verbose)
                     # TODO: Update worktree information
                 except PybmError:
-                    try:
-                        python_spec = provider.link(worktree.root, verbose=verbose)
-                    except ProviderError:
-                        if force_creation:
-                            python_spec = provider.create(
-                                executable=sys.executable,
-                                destination=worktree.root,
-                            )
-                        else:
-                            python_spec = EmptyPythonSpec
+                    venv = PythonVenv(
+                        executable=sys.executable,
+                        directory=worktree.root,
+                    ).create(in_tree=True)
 
                     name = "main" if i == 0 else f"workspace_{i + 1}"
 
                     self.workspaces[name] = Workspace(
                         name=name,
                         worktree=worktree,
-                        spec=python_spec,
+                        venv=venv,
                     )
 
     def uninstall(self, options: argparse.Namespace):
@@ -248,23 +221,15 @@ class WorkspaceCommand(WorkspaceManagerContextMixin, CLICommand):
 
         verbose: bool = option_dict.pop("verbose")
 
-        info: str = option_dict.pop("identifier")
+        info: str = option_dict.pop("name")
 
-        packages: List[str] = option_dict.pop("packages", [])
-        uninstall_options: List[str] = option_dict.pop("options", [])
-
-        provider: BaseProvider = PythonVenvProvider()
+        packages: List[str] = option_dict.pop("packages")
+        uninstall_options: List[str] = option_dict.pop("options")
 
         with self.main_context(verbose=verbose, readonly=False):
             workspace = self.get(info)
-
-            provider.remove(
-                workspace=workspace,
-                packages=packages,
-                options=uninstall_options,
-                verbose=verbose,
-            )
-            workspace.update_packages()
+            venv = workspace.venv
+            venv.remove(packages=packages, options=uninstall_options).update()
 
         return SUCCESS
 

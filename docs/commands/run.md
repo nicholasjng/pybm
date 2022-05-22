@@ -24,7 +24,7 @@ optional arguments:
   --context <context>   Additional global context, given as strings in the format--context='key'='value'. Keys must be unique, supplying two or more context values for the same key results in an error.
 ```
 
-The `pybm run` command is perhaps the heart of `pybm`'s functionality. It is responsible for discovering, dispatching
+The `pybm run` command is responsible for discovering, dispatching
 and running the appropriate benchmarks across the chosen workspaces. There are multiple nuances to running benchmarks
 in pybm, all of which will be covered now.
 
