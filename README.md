@@ -88,13 +88,13 @@ or
 2) with the same Python virtual environment between all refs:
 
 ```shell
-pybm run benchmark.py my-ref1 my-ref2 [...] my-refN --checkout
+pybm run benchmark.py my-ref1 my-ref2 [...] my-refN --use-checkouts
 ```
 
 If you did not install your Python package locally, consider running your benchmarks in module mode:
 
 ```shell
-pybm run benchmark.py my-ref1 [...] my-refN --as-module --checkout
+pybm run benchmark.py my-ref1 [...] my-refN --as-module --use-checkouts
 ```
 
 ## Requirements
@@ -137,7 +137,3 @@ pull request.
 
 If you are using pybm and want to share your experience with it, or if you have general feedback, please feel free to
 send me an e-mail to the address in my GitHub profile.
-
-## Origin
-
-The idea for this project came in June 2021, during some hobby work on the JAX project.
