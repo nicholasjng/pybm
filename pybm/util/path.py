@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import List, Optional, Union
 
@@ -27,6 +28,11 @@ def get_filenames(
     filtered = filter(lambda x: x.is_file() and x.suffix == file_ext, p.iterdir())
 
     return [f.name for f in filtered]
+
+
+def is_empty(directory: Union[str, Path]) -> bool:
+    with os.scandir(directory) as it:
+        return not any(it)
 
 
 def lsdir(

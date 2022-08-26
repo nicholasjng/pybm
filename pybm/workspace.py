@@ -116,4 +116,8 @@ class Workspace:
         self.commit = resolve_commit(ref)
 
     def venv_in_tree(self):
-        return get_venv_root(self.executable).parent == Path(self.root)
+        venv_root = get_venv_root(self.executable)
+        if not venv_root.exists():
+            return False
+        else:
+            return venv_root.parent == Path(self.root)

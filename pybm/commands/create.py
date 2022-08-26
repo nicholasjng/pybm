@@ -175,12 +175,10 @@ class CreateCommand(WorkspaceManagerContextMixin, CLICommand):
                 name = name or f"workspace_{len(self.workspaces) + 1}"
 
                 # either create venv in worktree or link from outside
-                if options.link_dir is None:
-                    in_tree = True
-                    directory = worktree.root
+                if options.link_dir is not None:
+                    in_tree, directory = False, options.link_dir
                 else:
-                    in_tree = False
-                    directory = options.link_dir
+                    in_tree, directory = True, worktree.root
 
                 venv = PythonVenv(
                     directory=directory,

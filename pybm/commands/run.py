@@ -246,8 +246,10 @@ class RunCommand(WorkspaceManagerContextMixin, CLICommand):
 
                         if rc != 0:
                             raise PybmError(
-                                "Something went wrong during the benchmark. "
-                                f"Stderr output of the dispatched subprocess:\n{data}"
+                                f"Benchmark {benchmark} returned the non-zero "
+                                f"exit code {rc}. "
+                                "Stderr output of the dispatched subprocess: "
+                                f"\n{data}"
                             )
 
                         reporter.write(ref, benchmark, data)

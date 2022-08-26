@@ -233,7 +233,7 @@ class PythonVenv:
         return self
 
     def list(self) -> Tuple[List[str], List[str]]:
-        if self.executable == "":
+        if self.executable == "" or not Path(self.executable).exists():
             return [], []
 
         command = [self.executable, "-m", "pip", "list"]

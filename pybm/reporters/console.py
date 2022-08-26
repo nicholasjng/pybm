@@ -123,7 +123,7 @@ def reduce(results: List[Dict[str, Any]]) -> Tuple[Dict[str, Any], ...]:
     # for holding secondary metrics (standard deviation etc.)
     reduced_copy = copy.copy(reduced)
 
-    # fast path for these scenarios:
+    # fast path for the scenarios:
     # 1) error during benchmark (results in single result object)
     # 2) result is already an aggregate (e.g. pre-calculated like in GBM)
     if len(results) == 1:
@@ -137,14 +137,15 @@ def reduce(results: List[Dict[str, Any]]) -> Tuple[Dict[str, Any], ...]:
 
     for k, v in result.items():
         # all elements share one type due to the same schema
-        if isinstance(v[0], float):
+        first = v[0]
+        if isinstance(first, (int, float)):
             # TODO: Allow other forms of reduction
             mu = mean(v)
             reduced[k] = mu
             reduced_copy[k] = stdev(v, mu)
         else:
-            reduced[k] = v[0] + "_mean" if k == "name" else v[0]
-            reduced_copy[k] = v[0] + "_stddev" if k == "name" else v[0]
+            reduced[k] = first + "_mean" if k == "name" else first
+            reduced_copy[k] = first + "_stddev" if k == "name" else first
 
     return reduced, reduced_copy
 

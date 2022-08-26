@@ -68,7 +68,7 @@ class InitCommand(WorkspaceManagerContextMixin, CLICommand):
             action="store_true",
             default=False,
             dest="remove_existing",
-            help="Overwrite any existing configuration.",
+            help="Overwrite any existing local configuration.",
         )
         self.parser.add_argument(
             "-o",
@@ -85,8 +85,8 @@ class InitCommand(WorkspaceManagerContextMixin, CLICommand):
             "--skip-global",
             action="store_true",
             default=False,
-            help="Skip applying system-wide defaults set in the global config file to "
-            "the newly created pybm configuration.",
+            help="Skip applying system-wide defaults set in the global config file "
+            "(if existent) to the newly created pybm configuration.",
         )
         self.parser.add_argument(
             "--link-existing",
@@ -137,10 +137,10 @@ class InitCommand(WorkspaceManagerContextMixin, CLICommand):
             "Can be used multiple times to supply multiple options.",
         )
         self.parser.add_argument(
-            "--extra-packages",
+            "--extra-package",
             default=list(),
             action="append",
-            metavar="<pkg-name>",
+            metavar="<pkg>",
             help="Additional packages to install into the main benchmark workspace.",
         )
 

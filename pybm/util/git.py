@@ -158,7 +158,8 @@ def list_branches(
     branches: List[str] = branch_output.splitlines()
 
     if names_only:
-        branches = list(set([b.split("/")[-1] for b in branches]))
+        # only split off the remote name by maxsplit=1
+        branches = list(set([b.split("/", maxsplit=1)[-1] for b in branches]))
 
     return branches
 

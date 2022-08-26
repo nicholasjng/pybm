@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from pybm import PybmError
 from pybm.io.util import create_subdir, get_rundir
 from pybm.util.common import dfilter_regex, lfilter, lfilter_regex, lmap
-from pybm.util.path import get_subdirs, lsdir
+from pybm.util.path import get_subdirs, lsdir, is_empty
 
 # these context values are protected and will always be present
 PRIVILEGED_CONTEXT = ["executable", "ref", "commit"]
@@ -99,6 +99,12 @@ class JSONFileIO:
             try:
                 json.dump(json.loads(obj), res)
             except json.JSONDecodeError:
+                # remove the subdirectory again
+                subdir.rmdir()
+                # remove rundir as well if it is empty
+                if is_empty(self.rundir):
+                    self.rundir.rmdir()
+
                 raise PybmError(
                     f"Could not write benchmark results to file {result_file}: "
                     f"Unparseable JSON object {obj!r}."
