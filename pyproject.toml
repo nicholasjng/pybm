@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pybm"
+description = "A Python CLI for reproducible benchmarking in a git repository."
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+keywords = ["benchmark"]
+
+authors = [
+    {name = "Nicholas Junge"},
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Testing",
+    "Topic :: System :: Benchmark",
+]
+
+dynamic = ["readme", "version"]
+
+dependencies = [
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+gbm = ["google-benchmark"]
+
+[project.scripts]
+pybm = "pybm.main:main"
+
+[project.urls]
+Homepage = "https://github.com/nicholasjng/pybm"
+Documentation = "https://github.com/nicholasjng/pybm/tree/master/docs"
+Repository = "https://github.com/nicholasjng/pybm.git"
+
+[tool.setuptools]
+zip-safe = false
+
+
+[tool.setuptools.dynamic]
+version = { attr = "pybm.__version__" }
+readme = { file = "README.md", content-type = "text/markdown" }
