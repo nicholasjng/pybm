@@ -33,6 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dev = ["pre-commit", "ruff", "pytest", "black", "isort", "ruff"]
 gbm = ["google-benchmark"]
 
 [project.scripts]
@@ -46,7 +47,26 @@ Repository = "https://github.com/nicholasjng/pybm.git"
 [tool.setuptools]
 zip-safe = false
 
-
 [tool.setuptools.dynamic]
 version = { attr = "pybm.__version__" }
 readme = { file = "README.md", content-type = "text/markdown" }
+
+[tool.mypy]
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = [
+    "yaml.*"
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+select = ["E", "F"]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
+unfixable = []
+
+# Same as Black.
+line-length = 88
