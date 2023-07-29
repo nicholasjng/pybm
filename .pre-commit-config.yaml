@@ -11,6 +11,8 @@ repos:
   hooks:
   - id: mypy
     files: pybm/
+    exclude: pybm/third_party/
+    args: ["--config=pyproject.toml"]
 
 - repo: https://github.com/psf/black
   rev: 23.7.0
@@ -22,5 +24,6 @@ repos:
   rev: 5.12.0
   hooks:
     - id: isort
-      name: isort (python)
-      args: ["--profile", "black"]
+      name: isort
+      types_or: [cython, pyi, python]
+      args: ["--filter-files"]

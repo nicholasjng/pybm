@@ -51,11 +51,21 @@ zip-safe = false
 version = { attr = "pybm.__version__" }
 readme = { file = "README.md", content-type = "text/markdown" }
 
+# ---------- Linter & formatter setups -------------- #
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+line_length = "100"
+profile = "black"
+
 [tool.mypy]
 show_error_codes = true
 
 [[tool.mypy.overrides]]
 module = [
+    "pybm.third_party.*",
     "yaml.*"
 ]
 ignore_missing_imports = true
@@ -69,4 +79,4 @@ fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN
 unfixable = []
 
 # Same as Black.
-line-length = 88
+line-length = 100
