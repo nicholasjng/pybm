@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pre-commit", "ruff", "pytest", "black", "isort", "ruff"]
+dev = ["pre-commit", "pytest"]
 gbm = ["google-benchmark"]
 
 [project.scripts]
