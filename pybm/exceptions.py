@@ -1,4 +1,4 @@
-__all__ = ["CommandError", "GitError", "PybmError"]
+__all__ = ["CommandError", "GitError", "PybmError", "PythonError"]
 
 
 class CommandError(ValueError):
@@ -10,4 +10,8 @@ class GitError(ValueError):
 
 
 class PybmError(ValueError):
+    pass
+
+
+class PythonError(ValueError):
     pass
